@@ -1,0 +1,35 @@
+<scene version="1.1">
+  <project width="480" height="270" fps="12" duration="4" background="#101A2B"/>
+  <metadata title="Geometria e câmera" description="Prévia do backend 3D: geometria sem iluminação, transparência, parenting e câmera."/>
+  <output id="preview" path="geometry-preview.mp4" codec="h264" container="mp4" crf="18" preset="fast" audio="false">
+    <poster path="geometry-poster.png" time="1.5" width="480" format="png"/>
+  </output>
+  <assets>
+    <font id="inter" src="assets/inter.woff2" family="Inter"/>
+    <text id="title" text="GEOMETRIA EM MOVIMENTO" fontAsset="inter" size="22" color="#FFFFFF" width="420" height="32"/>
+    <text id="subtitle" text="Câmera · oclusão · transparência · seek determinístico" fontAsset="inter" size="11" color="#99AFCA" width="440" height="24"/>
+    <text id="footer" text="BATCH 05 / PRÉVIA PARCIAL — MATERIAIS UNLIT" fontAsset="inter" size="10" color="#76DACD" width="430" height="22"/>
+  </assets>
+  <materials>
+    <material id="teal" unlit="true" baseColor="#39D6BE"/>
+    <material id="orange" unlit="true" baseColor="#FFAC62"/>
+    <material id="glass" unlit="true" baseColor="#729CFF80" alphaMode="blend" doubleSided="true"/>
+  </materials>
+  <composition>
+    <camera id="cam" z="-430" fov="43"/>
+    <object3D id="orbit" primitive="torus" material="teal" radius="40" depth="15" segments="32" x="-96" y="8" castShadow="false" receiveShadow="false">
+      <animate property="rotationX"><key time="0" value="55"/><key time="4" value="235"/></animate>
+      <animate property="rotationY"><key time="0" value="0"/><key time="4" value="180"/></animate>
+    </object3D>
+    <object3D id="center" primitive="box" material="glass" width="68" height="68" depth="68" y="8" rotationX="25" castShadow="false" receiveShadow="false">
+      <animate property="rotationY"><key time="0" value="25"/><key time="4" value="205"/></animate>
+    </object3D>
+    <object3D id="inner" primitive="sphere" material="orange" radius="22" parent="center" castShadow="false" receiveShadow="false"/>
+    <object3D id="right" primitive="cone" material="orange" radius="33" height="76" x="96" y="8" rotationX="20" castShadow="false" receiveShadow="false">
+      <animate property="rotation"><key time="0" value="-15"/><key time="4" value="345"/></animate>
+    </object3D>
+    <layer id="heading" asset="title" x="28" y="24"/>
+    <layer id="sub" asset="subtitle" x="28" y="58"/>
+    <layer id="foot" asset="footer" x="28" y="236"/>
+  </composition>
+</scene>

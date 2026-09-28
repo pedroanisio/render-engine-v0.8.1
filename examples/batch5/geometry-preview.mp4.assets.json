@@ -1,0 +1,33 @@
+{
+  "renderer": "7",
+  "native": {},
+  "assets": [
+    {
+      "id": "inter",
+      "kind": "font",
+      "source": "assets/inter.woff2",
+      "files": [
+        {
+          "src": "assets/inter.woff2",
+          "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+        }
+      ]
+    },
+    {
+      "id": "title",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "subtitle",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "footer",
+      "kind": "text",
+      "files": []
+    }
+  ],
+  "effectResources": []
+}

@@ -1,0 +1,9 @@
+<materialx version="1.39">
+  <standard_surface name="satin" type="surfaceshader">
+    <input name="base_color" type="color3" value="0.018,0.52,0.38"/>
+    <input name="metalness" type="float" value="0.65"/>
+    <input name="specular_roughness" type="float" value="0.24"/>
+    <input name="coat" type="float" value="0.35"/>
+  </standard_surface>
+  <surfacematerial name="material" type="material"><input name="surfaceshader" type="surfaceshader" nodename="satin"/></surfacematerial>
+</materialx>

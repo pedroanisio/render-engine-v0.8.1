@@ -1,0 +1,105 @@
+{
+  "renderer": "10",
+  "native": {},
+  "assets": [
+    {
+      "id": "inter",
+      "kind": "font",
+      "source": "assets/inter.woff2",
+      "files": [
+        {
+          "src": "assets/inter.woff2",
+          "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+        }
+      ]
+    },
+    {
+      "id": "music",
+      "kind": "audio",
+      "source": "assets/music.wav",
+      "files": [
+        {
+          "src": "assets/music.wav",
+          "sha256": "ca4d2861560a5020916fb928d19a9ed1b5d5a6fb07af8ea3b482cecdd2a6cd8b"
+        }
+      ]
+    },
+    {
+      "id": "lead",
+      "kind": "audio",
+      "source": "assets/lead.wav",
+      "files": [
+        {
+          "src": "assets/lead.wav",
+          "sha256": "2a9b6cea493e1980089f7718ff6040a6f9302817948f17814edb87d1c04baf82"
+        }
+      ]
+    },
+    {
+      "id": "wave",
+      "kind": "audiogram",
+      "files": []
+    },
+    {
+      "id": "eyebrow",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "title",
+      "kind": "text",
+      "files": [
+        {
+          "src": "assets/inter.woff2",
+          "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+        }
+      ]
+    },
+    {
+      "id": "sub",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "label",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "footer",
+      "kind": "text",
+      "files": []
+    }
+  ],
+  "audio": {
+    "format": {
+      "sampleRate": 44100,
+      "channels": 2,
+      "channelLayout": "stereo",
+      "bitDepth": 24
+    },
+    "normalize": "integrated",
+    "targetLUFS": -16,
+    "ceilingDBTP": -1,
+    "before": {
+      "integrated": -24.35,
+      "truePeak": -15.94,
+      "lra": 2.7,
+      "threshold": -34.62
+    },
+    "after": {
+      "integrated": -16.01,
+      "truePeak": -7.59,
+      "lra": 2.6,
+      "threshold": -26.28
+    },
+    "samples": 352800,
+    "encoded": {
+      "integrated": -16.01,
+      "truePeak": -7.59,
+      "lra": 2.6,
+      "threshold": -26.28
+    }
+  },
+  "effectResources": []
+}

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scene version="1.1">
+  <project width="1920" height="1080" fps="30000/1001" duration="4" seed="18446744073709551615"/>
+  <styles>
+    <token name="brand" value="#FF3366"/>
+    <token name="ink" value="0.1,0.1,0.1"/>
+  </styles>
+  <assets>
+    <image id="logo" src="assets/logo.png" width="512" height="256"/>
+  </assets>
+  <paints>
+    <linearGradient id="sky">
+      <stop offset="0" color="var(--brand)"/>
+      <stop offset="1" color="#000000FF"/>
+    </linearGradient>
+  </paints>
+  <composition>
+    <shape id="bg" shape="rect" width="100vw" height="100vh" fill="url(#sky)"/>
+    <group id="g1" opacity="0.8">
+      <shape id="dot" shape="ellipse" width="40" height="40" fill="var(--ink)" x="50%" y="50%">
+        <animate property="x"><key time="0" value="0"/><key time="2" value="100"/></animate>
+      </shape>
+      <layer id="lg" asset="logo"/>
+    </group>
+  </composition>
+</scene>

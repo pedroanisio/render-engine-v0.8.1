@@ -1,0 +1,53 @@
+{
+  "version": "0.8.1",
+  "rendererVersion": "13",
+  "command": "npm run certify",
+  "typecheck": "passed",
+  "tests": 642,
+  "passed": 642,
+  "failed": 0,
+  "skipped": 0,
+  "coverage": {
+    "lines": 97.54,
+    "branches": 91.19,
+    "functions": 95.14
+  },
+  "requiredCoverage": {
+    "lines": 90,
+    "branches": 90,
+    "functions": 90
+  },
+  "batch7Certification": "incomplete",
+  "certificationExitCode": 2,
+  "evidence": {
+    "total": 3249,
+    "certified": 38,
+    "missing": 3211,
+    "report": "conformance-report.json"
+  },
+  "resolvedThisRelease": [
+    "Explicit 2D anchor position compatibility, including workers, stills and cache",
+    "Real authenticated SFTP transfer and host-key rejection",
+    "Strict codec-option guards instead of silently ignored controls",
+    "Multi-output result enumeration and path collision rejection",
+    "Worker cleanup, bounded logs and sibling cancellation",
+    "Partial-export size budgeting",
+    "Source-pinned per-attribute/enum conformance evidence gate"
+  ],
+  "beta": {
+    "frames": 7012,
+    "width": 192,
+    "height": 108,
+    "fps": 24,
+    "anchorMode": "position",
+    "decoded": true,
+    "nativeAudio": true,
+    "captions": true,
+    "strictOriginalSafeArea": "rejected",
+    "visualApproval": false
+  },
+  "remaining": [
+    "Individual positive/negative behavioral evidence for the items enumerated in conformance-report.json",
+    "Original Beta strict safe-area/editorial acceptance; the documented audit copy uses warnings"
+  ]
+}

@@ -1,0 +1,45 @@
+<scene version="1.1">
+  <project width="480" height="270" fps="8" duration="3" background="#0D1525" seed="17" quality="draft"/>
+  <metadata title="Batch 5 — Materiais, movimento e dinâmica"/>
+  <output id="preview" path="extended-preview.mp4" codec="h264" container="mp4" audio="false" crf="18" preset="fast">
+    <poster path="extended-poster.png" time="0.5" width="480" format="png"/>
+  </output>
+  <assets>
+    <font id="inter" src="assets/inter.woff2" family="Inter"/>
+    <text id="title" text="FORMA, LUZ E MOVIMENTO" fontAsset="inter" size="21" color="#FFFFFF" width="430" height="32"/>
+    <text id="subtitle" text="Cycles CPU · MaterialX / OSL · Simulação em passos fixos" fontAsset="inter" size="10" color="#A4B5CF" width="440" height="22"/>
+    <text id="label1" text="MATERIALX" fontAsset="inter" size="9" color="#A4B5CF" width="110" height="22"/>
+    <text id="label2" text="METAL / COAT" fontAsset="inter" size="9" color="#A4B5CF" width="110" height="22"/>
+    <text id="label3" text="PARTÍCULAS" fontAsset="inter" size="9" color="#A4B5CF" width="110" height="22"/>
+    <text id="footer" text="Deformação de malha + colisões físicas / seed 17" fontAsset="inter" size="10" color="#76DACD" width="430" height="22"/>
+  </assets>
+  <materials>
+    <material id="satin" materialX="assets/satin.mtlx"/>
+    <material id="gold" baseColor="#FDB759" metallic="0.82" roughness="0.23" clearcoat="0.7"/>
+  </materials>
+  <composition>
+    <camera id="cam" z="-380" fov="45" depthOfField="true" focusDistance="380" fStop="8"/>
+    <object3D id="torus" primitive="torus" material="satin" x="-107" y="4" radius="34" depth="16" segments="32" rotationX="60">
+      <animate property="rotationY"><key time="0" value="-20"/><key time="3" value="170"/></animate>
+    </object3D>
+    <object3D id="sphere" primitive="sphere" material="gold" x="8" y="5" radius="35" segments="32"/>
+    <particleEmitter id="sparks" preset="sparks" seed="17" x="380" y="161" rate="35" lifetime="0.5" speed="66" direction="-90" spread="55" gravityY="36" emitterShape="point" color="#FFC272" size="3"/>
+    <shape id="wave" shape="rect" x="28" y="209" width="334" height="4" fill="#2FAF9A">
+      <deform><modifier type="wave" amount="4" frequency="3"><animate property="phase"><key time="0" value="0"/><key time="3" value="6.28"/></animate></modifier></deform>
+    </shape>
+    <shape id="ball" shape="ellipse" x="401" y="189" width="14" height="14" fill="#FFC272"><rigidBody shape="circle" restitution="0.8" velocityY="-30"/></shape>
+    <shape id="floor" shape="rect" x="376" y="223" width="68" height="2" fill="#3C526F"><rigidBody type="static"/></shape>
+    <layer id="heading" asset="title" x="28" y="22"/>
+    <layer id="sub" asset="subtitle" x="28" y="54"/>
+    <layer id="name1" asset="label1" x="103" y="185"/>
+    <layer id="name2" asset="label2" x="216" y="185"/>
+    <layer id="name3" asset="label3" x="350" y="185"/>
+    <layer id="foot" asset="footer" x="28" y="239"/>
+  </composition>
+  <lights>
+    <light id="key" type="rect-area" x="-90" y="-130" z="-180" width="140" height="100" intensity="6"/>
+    <light id="rim" type="point" x="120" y="-20" z="-70" intensity="2" color="#74C6FF"/>
+    <light id="ambient" type="ambient" intensity="0.2" color="#B7CBFF"/>
+  </lights>
+  <physics cache="assets/physics.json" cacheSha256="cbf946e9cda3be13d8869762d99b22b11f55d2815c70e08c87b6efb072dd79e2" gravityY="-2" fixedStep="0.008333333333333333" pixelsPerMeter="100" solverIterations="8"/>
+</scene>

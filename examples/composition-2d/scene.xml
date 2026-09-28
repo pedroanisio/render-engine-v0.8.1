@@ -1,0 +1,32 @@
+<scene version="1.1">
+  <project width="320" height="180" fps="12" duration="2" background="url(#background)"/>
+  <output id="landscape" path="composition-2d.mp4" codec="h264" container="mp4" preset="ultrafast"/>
+  <output id="portrait" path="composition-2d-portrait.mp4" codec="h264" container="mp4" preset="ultrafast" layout="portrait-layout"/>
+  <layouts><layout id="portrait-layout" width="180" height="320" reframe="fit-blur"/></layouts>
+  <paints>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop offset="0" color="#101A35"/><stop offset="1" color="#271332"/></linearGradient>
+    <linearGradient id="accent" rotation="25" interpolationSpace="oklab"><stop offset="0" color="#40E9C5"/><stop offset="1" color="#7296FF"/></linearGradient>
+    <radialGradient id="orb"><stop offset="0" color="#FFFFFF"/><stop offset="0.3" color="#77DDF1"/><stop offset="1" color="#3457D5"/></radialGradient>
+  </paints>
+  <symbols>
+    <symbol id="spark" width="32" height="32" duration="2">
+      <shape id="star" shape="star" width="32" height="32" points="4" innerRadius="3" outerRadius="14" fill="url(#accent)" anchorX="16" anchorY="16"><animate property="rotation"><key time="0" value="0"/><key time="2" value="180"/></animate></shape>
+    </symbol>
+  </symbols>
+  <composition>
+    <group id="grid" x="20" y="24" width="280" height="132" layout="row" gap="12">
+      <shape id="card1" shape="rounded-rect" width="134" height="132" radius="18" fill="#FFFFFF08" stroke="#FFFFFF18" strokeWidth="1"/>
+      <shape id="card2" shape="rounded-rect" width="134" height="132" cornerRadii="18 18 18 18" fill="#FFFFFF08" stroke="#FFFFFF18" strokeWidth="1"/>
+    </group>
+    <group id="orbGroup" x="45" y="41" width="84" height="84" rotation="-12" anchorX="42" anchorY="42">
+      <shape id="orbShape" shape="ellipse" width="84" height="84" fill="url(#orb)"/>
+      <shape id="ring" shape="ellipse" x="-9" y="25" width="102" height="34" fill="#00000000" stroke="url(#accent)" strokeWidth="3" trimStart="0.05" trimEnd="0.95"/>
+    </group>
+    <repeat id="dots" count="5" offsetX="13" x="60" y="137" opacityStep="0.15"><shape id="dot" shape="ellipse" width="5" height="5" fill="#82CBEF"/></repeat>
+    <instance id="sparkA" symbol="spark" x="190" y="42" scaleX="1.5" scaleY="1.5"/>
+    <instance id="sparkB" symbol="spark" x="250" y="62" speed="-1"/>
+    <group id="bars" x="188" y="116" width="89" height="28" clip="true">
+      <repeat id="barsRepeat" count="8" offsetX="12"><shape id="bar" shape="rounded-rect" width="7" height="28" radius="3" fill="url(#accent)"><expression property="y">8+6*sin(time*PI*2+index)</expression></shape></repeat>
+    </group>
+  </composition>
+</scene>

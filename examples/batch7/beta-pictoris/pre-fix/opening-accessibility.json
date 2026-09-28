@@ -1,0 +1,58 @@
+{
+  "configuration": {
+    "description": "A tabletop explainer. A printed telescope image of the planet Beta Pictoris b; paper schematics of the star and planet; quote cards; a paper tuning dial that converts radio frequency into magnetic field strength; a bar chart comparing Earth, Jupiter and Beta Pictoris b; a timeline of earlier radio claims; and a closing sources sheet.",
+    "audioDescription": null,
+    "requireCaptions": false,
+    "flashCheck": "warn",
+    "contrastCheck": "warn",
+    "minContrast": 4.5
+  },
+  "interval": {
+    "start": 0,
+    "end": 1
+  },
+  "flash": {
+    "frames": 24,
+    "fps": 24,
+    "referenceViewport": "one-third width × one-third height; 25% area threshold",
+    "findings": [
+      {
+        "time": 0.375,
+        "area": 0.2981770833333333
+      }
+    ]
+  },
+  "findings": [
+    {
+      "check": "flash",
+      "message": "More than three flashes/second across 29.8% of a reference viewport",
+      "severity": "warn",
+      "time": 0.375
+    },
+    {
+      "check": "contrast",
+      "message": "s01-tab-txt: 1.00:1 < 4.5:1",
+      "severity": "warn",
+      "time": 0
+    },
+    {
+      "check": "contrast",
+      "message": "g-s01-h1: 1.00:1 < 4.5:1",
+      "severity": "warn",
+      "time": 0
+    },
+    {
+      "check": "contrast",
+      "message": "g-s01-kicker: 1.00:1 < 4.5:1",
+      "severity": "warn",
+      "time": 0
+    },
+    {
+      "check": "contrast",
+      "message": "g-s01-credit: 1.00:1 < 4.5:1",
+      "severity": "warn",
+      "time": 0
+    }
+  ],
+  "passed": true
+}

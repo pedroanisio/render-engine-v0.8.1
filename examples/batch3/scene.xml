@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scene version="1.1">
+  <project width="640" height="360" fps="12" duration="4" background="#0B1020"/>
+  <styles>
+    <textStyle id="base" fontAsset="inter" color="#E9EEFF"/>
+    <textStyle id="heading" basedOn="base" variation="wght=720"/>
+    <textStyle id="caption" basedOn="base" variation="wght=420" color="#A8B6D4"/>
+  </styles>
+  <output id="preview" path="preview.mp4" codec="h264" container="mp4" preset="ultrafast" crf="18">
+    <poster format="png" path="poster.png" time="2.5" width="640"/>
+  </output>
+  <assets>
+    <font id="inter" src="assets/inter.woff2" family="Inter" license="OFL-1.1"/>
+    <generator id="backdrop" kind="gradient" width="640" height="360" paint="#101932" paint2="#163A45" angle="30"/>
+    <text id="eyebrow" text="SCENE RENDER · BATCH 03" width="560" height="22" size="13" style="caption" tracking="140"/>
+    <text id="title" text="Mídia em movimento." width="560" height="66" size="44" style="heading" color="url(#titlePaint)"/>
+    <text id="subtitle" text="Assets auditados. Tipografia variável. Frames reproduzíveis." width="560" height="44" size="17" style="caption"/>
+    <chart id="chart" kind="column" width="270" height="90" showAxes="false" progress="0" labels="A,B,C,D">
+      <series name="Demo" values="2 4 3 6" color="#55DCC1"/>
+      <animate property="progress"><key time="0" value="0"/><key time="2" value="1" interpolation="ease-in-out"/></animate>
+    </chart>
+    <formula id="formula" tex="E=mc^2" width="200" height="70" size="38" color="#E9EEFF"/>
+    <code id="qr" kind="qr" data="scene-render-js batch 3" width="74" height="74" foreground="#E9EEFF" background="#00000000"/>
+    <text id="footer" text="OFFLINE RENDER  /  FIXED ASSET CACHE" width="500" height="22" size="11" style="caption" tracking="100"/>
+  </assets>
+  <paints><linearGradient id="titlePaint"><stop offset="0" color="#FFFFFF"/><stop offset="1" color="#62E1C7"/></linearGradient></paints>
+  <composition>
+    <layer id="bg" asset="backdrop"/>
+    <layer id="kicker" asset="eyebrow" x="40" y="28"/>
+    <layer id="headline" asset="title" x="38" y="65"><textAnimator preset="slide-up" presetDuration="0.6" stagger="0.025" overlap="0.4"/></layer>
+    <layer id="description" asset="subtitle" x="40" y="138"><textAnimator preset="fade-in" unit="word" presetStart="0.4" presetDuration="0.5" stagger="0.035"/></layer>
+    <shape id="card" shape="rounded-rect" x="38" y="200" width="564" height="112" radius="14" fill="#101C2DDD"/>
+    <layer id="data" asset="chart" x="50" y="212"/>
+    <layer id="equation" asset="formula" x="345" y="217"/>
+    <layer id="code" asset="qr" x="510" y="220"/>
+    <layer id="note" asset="footer" x="40" y="327"/>
+  </composition>
+</scene>

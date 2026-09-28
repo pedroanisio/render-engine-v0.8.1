@@ -1,0 +1,805 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> scene-render-js@0.8.1 certify
+> node scripts/certify.js
+
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> scene-render-js@0.8.1 check
+> npm run typecheck && npm test
+
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> scene-render-js@0.8.1 typecheck
+> tsc -p tsconfig.json
+
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> scene-render-js@0.8.1 test
+> node --test --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-exclude='src/generated/**' --test-coverage-branches=90 --test-coverage-lines=90 --test-coverage-functions=90 'test/**/*.test.js'
+
+✔ lists every file the scene depends on with its declared expectations (8.771677ms)
+✔ sniffs PNG, WAV, fonts and JPEG by content (1.455495ms)
+✔ flags mismatches against declared dimensions, audio format and hash (3.534531ms)
+[mov,mp4,m4a,3gp,3g2,mj2 @ 0x5562509b5bc0] Unknown projection type: mshp
+[mov,mp4,m4a,3gp,3g2,mj2 @ 0x5650edb87bc0] Unknown projection type: mshp
+[mov,mp4,m4a,3gp,3g2,mj2 @ 0x558dade78bc0] Unknown projection type: mshp
+[mov,mp4,m4a,3gp,3g2,mj2 @ 0x56395233fbc0] Unknown projection type: mshp
+[mov,mp4,m4a,3gp,3g2,mj2 @ 0x55df747d9bc0] Unknown projection type: mshp
+[mov,mp4,m4a,3gp,3g2,mj2 @ 0x55faf4ba2bc0] Unknown projection type: mshp
+✔ continuous particle contacts prevent tunnelling and resolve radius, tangents and moving walls (3.516164ms)
+✔ 3D stack shares depth, respects 2D interleaving and isolated group opacity/masks (2611.924217ms)
+✔ 3D parenting projects a 2D layer and native shadow visibility can animate (1402.77366ms)
+✔ 3D reframing preserves image geometry under crop and fit (43.888979ms)
+✔ automatic layout reserves the deformed extent without changing the source box (66.21266ms)
+✔ V2 compressed meshes decode to the rendered atlas and include CRC/stereo (2012.904897ms)
+✔ all panorama metadata survives fast-start remux and repeated injection without altering decoded pixels (1978.712864ms)
+✔ burst particle budget is enforced before allocation (1.417158ms)
+✔ authored shadow map resolution and bias change depth comparisons, while castShadow disables them (3032.054528ms)
+✔ environment receiveShadow overrides and diffuse/specular filters affect native pixels (2302.998392ms)
+✔ particle collisions use historical moving fixtures and preserve backward seeks with animated emitters (1004.324844ms)
+✔ custom OCIO working space round-trips projected textures without display grading (2425.978812ms)
+✔ projected deformations retain pixels outside the undeformed box (1707.634529ms)
+✔ puppet position, bend and starch constraints interpolate pins and preserve affine motion (2.176032ms)
+✔ projection triangles face the viewer inside the spherical mesh (87.428631ms)
+✔ native 3D group effects and geometry mattes remain isolated from sibling overlays (1456.218961ms)
+✔ native camera parenting and physical sensor height affect projection (2232.665673ms)
+✔ glTF named clips, morph targets and material variants survive real native import (4258.371773ms)
+✔ FBX camera tracking samples real authored keyframes (1253.408637ms)
+✔ collision hulls preserve concave area and reject empty alpha (2.360026ms)
+✔ MaterialX dependency graph audits includes, textures, cycles and unsafe paths (1.422065ms)
+✔ spherical MP4 metadata preserves decodability and records stereo in ffprobe (615.234515ms)
+✔ imported glTF skinning moves only the vertices weighted to the animated joint (1108.569207ms)
+✔ static glTF keeps imported material slots without requiring animation flags (641.327918ms)
+✔ static Assimp material slots, UVs and audited textures survive the native fallback (600.808217ms)
+✔ static USD material bindings and indexed UV primvars retain their image colours (918.69939ms)
+✔ caption formats parse timing, voices, cue position, ASS karaoke and TTML/ITT nested timing (8.919257ms)
+✔ pagination never concatenates or discards overflow and clips every cue/word on export (3.146592ms)
+✔ transcription caches verify identity and SHA-256; imports are deterministic (1.210779ms)
+✔ every caption preset renders with typography, safe areas, active styles and stable random-access frames (2634.657686ms)
+✔ flash detector distinguishes steady, low-contrast, small-area and rapid opposing transitions (18.997326ms)
+✔ accessibility requirements reject missing captions and inaudible audio descriptions (1.082758ms)
+✔ SCC import uses the installed CEA-608 decoder (53.41496ms)
+✔ imported ASS and TTML styles, regions, sequential time and timed spans survive pagination (4.463911ms)
+✔ full B6 render contains audio and timed text, checks final AAC peaks, outputs reports, and resumes deterministically (11258.046408ms)
+✔ contrast error blocks final publication; warn reports findings; audio=false keeps embedded captions (10380.340331ms)
+✔ source caption bytes invalidate visual caches and mode=sidecar has no burned pixels (8601.216347ms)
+✔ position anchors register the pivot at x/y through nested, rotated, reflected transforms (2.434688ms)
+✔ anchor compatibility rejects unknown modes and incompatible dynamics (0.875158ms)
+✔ anchor mode changes decoded pixels, invalidates cache, and reaches workers and stills (6434.78822ms)
+✔ graceful subprocess cancellation lets a worker complete its owned cleanup (72.773476ms)
+✔ multi-output returns each result and rejects colliding paths before any export (2141.286319ms)
+✔ every codec/container pairing either plans its specified muxer or explicitly rejects it (8.36494ms)
+✔ ProRes profile proxy is present in a decoded real stream (140.695484ms)
+✔ ProRes profile lt is present in a decoded real stream (201.745604ms)
+✔ ProRes profile 422 is present in a decoded real stream (120.837647ms)
+✔ ProRes profile hq is present in a decoded real stream (138.974502ms)
+✔ ProRes profile 4444 is present in a decoded real stream (110.648492ms)
+✔ ProRes profile 4444xq is present in a decoded real stream (97.457722ms)
+✔ every output transfer and color-space enum transforms numerical samples reversibly (3.318629ms)
+✔ GOP/B-frames, faststart and all standard metadata fields survive a real export (2733.671588ms)
+✔ still quality changes encoded detail rather than only its declared filename (54.870195ms)
+✔ end-to-end h264.mp4 (1456.05705ms)
+✔ end-to-end h265.mp4 (1469.80335ms)
+✔ end-to-end lossless.mkv (1341.920015ms)
+✔ end-to-end av1.webm (1423.398711ms)
+✔ end-to-end vp9.webm (1256.155152ms)
+✔ end-to-end prores.mov (1275.844998ms)
+✔ end-to-end dnxhr.mov (2238.181657ms)
+✔ end-to-end anim.gif (1527.822551ms)
+✔ end-to-end anim.apng (1632.607118ms)
+✔ end-to-end anim.webp (1665.077458ms)
+✔ end-to-end audio.wav (1756.533596ms)
+✔ end-to-end audio.m4a (1504.155126ms)
+✔ end-to-end audio.mp3 (1373.15717ms)
+✔ sequence png (1812.292906ms)
+✔ sequence jpeg (1820.365611ms)
+✔ sequence exr (1644.483923ms)
+✔ sequence tiff (1512.065447ms)
+✔ all still encoders honor format, size and marker; ranged output and corrupt cache repair (3809.82692ms)
+✔ two-pass bitrate export and maximum file size (1268.035664ms)
+✔ preflight rejects incompatible contracts (163.641213ms)
+✔ spawn failures, broken pipes and cancellation reject promptly (151.285609ms)
+✔ file and HTTP delivery, signed cloud profiles, webhook and errors (63.257738ms)
+✔ bounded cache evicts oldest pixels; output lock blocks concurrent writers and recovers stale owners (2.933263ms)
+✔ float EXR path retains highlights and 16-bit alpha is unassociated only for alpha outputs (2.066077ms)
+✔ style tokens cannot recurse through a missing style ID; feature tags default to on (0.685975ms)
+✔ multiple outputs, rational FPS, odd RGB sizes, metadata opt-out and timecode (2595.96246ms)
+✔ manifest exposes enum contracts without claiming parsing is certification (24.920309ms)
+✔ disk stems evict, reload bit-exact samples and return missing references (1.563727ms)
+✔ MXF and encoder-option rejection are verified against the actual backend (5530.221072ms)
+✔ ambisonic Opus carries mapping family 2 and WAV honors mix bit depth (2523.701695ms)
+✔ partial timecodes advance on the output frame clock (0.738874ms)
+✔ sequence destinations receive a complete numbered-frame ZIP (1060.284991ms)
+✔ shorter sequence replacement removes only previously owned frames (2063.191281ms)
+✔ abort rejects a render and leaves no published output or owned run directory (1450.668028ms)
+✔ HDR mastering metadata and rate control options survive real encoding (3391.921788ms)
+✔ native finishing grain honors intensity and size instead of obscuring the scene (3.180012ms)
+✔ SFTP transfers real bytes atomically with verified host keys and rejects wrong credentials (247.462392ms)
+✔ malformed credential profiles fail without echoing secret values (0.557483ms)
+✔ validate exits 0 and reports a valid scene (13.026889ms)
+✔ validate exits 1 and prints one located line per diagnostic (3.782333ms)
+✔ --json emits a machine-readable verdict (3.203157ms)
+✔ prints parse errors without an element path (0.328511ms)
+✔ reports non-Error read failures (0.214801ms)
+✔ exits 2 on usage and I/O errors (0.319979ms)
+✔ assets reports every file dependency and exits 1 when any is missing or wrong (2.45608ms)
+✔ assets --json carries hashes and sniffed facts for machine intake (1.386431ms)
+✔ assets exits 0 when every dependency is present and consistent (1.202367ms)
+✔ assets refuses an invalid scene with its diagnostics (0.758874ms)
+✔ parseRenderArgs reads options and rejects bad ones (0.629711ms)
+✔ vector/include/layout exports reuse cache and invalidate edited included content (4283.28944ms)
+✔ affine inverse, units and pivot contracts (4.517371ms)
+✔ nested pivots, negative scale, skew, explicit parent and offscreen source (538.642543ms)
+✔ transformed clipping and zero scale (11.403762ms)
+✔ animated transforms and percent lengths affect actual pixels at multiple resolutions (40.642037ms)
+✔ pixel fixture: rect (8.138523ms)
+✔ pixel fixture: rounded-rect (3.932106ms)
+✔ pixel fixture: ellipse (3.274814ms)
+✔ pixel fixture: polygon (5.621271ms)
+✔ pixel fixture: star (4.201769ms)
+✔ pixel fixture: line (6.624259ms)
+✔ pixel fixture: path (5.931665ms)
+✔ fill rules, stroke placement, caps, joins, dashes and paint order (124.995353ms)
+✔ modifier fixture: repeater (17.269638ms)
+✔ modifier fixture: offset-path (7.217816ms)
+✔ modifier fixture: pucker-bloat (8.710398ms)
+✔ modifier fixture: zig-zag (6.582407ms)
+✔ modifier fixture: twist (8.185462ms)
+✔ modifier fixture: round-corners (7.185328ms)
+✔ modifier fixture: wiggle-path (6.588656ms)
+✔ modifier fixture: merge (7.352307ms)
+✔ modifier fixture: trim (8.154357ms)
+✔ trim modes, wrapped offset and path operators have geometric effects (1.183509ms)
+✔ blend fixture: normal (1.561314ms)
+✔ blend fixture: dissolve (6.826912ms)
+✔ blend fixture: add (6.062911ms)
+✔ blend fixture: plus-lighter (5.154904ms)
+✔ blend fixture: multiply (5.957533ms)
+✔ blend fixture: screen (7.535411ms)
+✔ blend fixture: overlay (12.719899ms)
+✔ blend fixture: difference (5.667199ms)
+✔ blend fixture: exclusion (9.641228ms)
+✔ blend fixture: subtract (9.848978ms)
+✔ blend fixture: divide (8.883215ms)
+✔ blend fixture: darken (9.477413ms)
+✔ blend fixture: lighten (8.613783ms)
+✔ blend fixture: darker-color (9.354049ms)
+✔ blend fixture: lighter-color (8.566021ms)
+✔ blend fixture: color-dodge (9.733186ms)
+✔ blend fixture: color-burn (12.439801ms)
+✔ blend fixture: linear-dodge (7.302293ms)
+✔ blend fixture: linear-burn (9.265396ms)
+✔ blend fixture: soft-light (15.153246ms)
+✔ blend fixture: hard-light (10.269117ms)
+✔ blend fixture: linear-light (7.680668ms)
+✔ blend fixture: vivid-light (8.201536ms)
+✔ blend fixture: pin-light (5.64104ms)
+✔ blend fixture: hard-mix (5.260041ms)
+✔ blend fixture: hue (7.179108ms)
+✔ blend fixture: saturation (6.476949ms)
+✔ blend fixture: color (5.555202ms)
+✔ blend fixture: luminosity (5.454001ms)
+✔ blend fixture: stencil-alpha (5.785065ms)
+✔ blend fixture: stencil-luma (5.914339ms)
+✔ blend fixture: silhouette-alpha (6.000628ms)
+✔ blend fixture: silhouette-luma (8.659882ms)
+✔ blend fixture: alpha-add (6.080167ms)
+✔ blend fixture: behind (8.060396ms)
+✔ linear-light blend reference values and isolated group backdrop (13.528398ms)
+✔ paint fixture: linearGradient (7.506327ms)
+✔ paint fixture: radialGradient (6.666092ms)
+✔ paint fixture: conicGradient (5.180131ms)
+✔ paint fixture: meshGradient (17.265633ms)
+✔ gradient spread, midpoint, opacity, color spaces, rotation and animation (77.122766ms)
+✔ mask fixture: rect/intersect (5.342885ms)
+✔ mask fixture: rect/add (3.580081ms)
+✔ mask fixture: rect/subtract (3.721541ms)
+✔ mask fixture: rect/lighten (6.253856ms)
+✔ mask fixture: rect/darken (4.848926ms)
+✔ mask fixture: rect/difference (3.522214ms)
+✔ mask fixture: rect/none (7.13338ms)
+✔ mask fixture: rounded-rect/intersect (4.435209ms)
+✔ mask fixture: rounded-rect/add (3.589946ms)
+✔ mask fixture: rounded-rect/subtract (3.677105ms)
+✔ mask fixture: rounded-rect/lighten (3.301574ms)
+✔ mask fixture: rounded-rect/darken (3.365189ms)
+✔ mask fixture: rounded-rect/difference (3.515303ms)
+✔ mask fixture: rounded-rect/none (4.298424ms)
+✔ mask fixture: ellipse/intersect (3.816964ms)
+✔ mask fixture: ellipse/add (3.53982ms)
+✔ mask fixture: ellipse/subtract (3.556224ms)
+✔ mask fixture: ellipse/lighten (3.263617ms)
+✔ mask fixture: ellipse/darken (5.33318ms)
+✔ mask fixture: ellipse/difference (3.288404ms)
+✔ mask fixture: ellipse/none (3.156227ms)
+✔ mask fixture: polygon/intersect (3.316757ms)
+✔ mask fixture: polygon/add (3.255826ms)
+✔ mask fixture: polygon/subtract (3.433802ms)
+✔ mask fixture: polygon/lighten (5.479529ms)
+✔ mask fixture: polygon/darken (3.421423ms)
+✔ mask fixture: polygon/difference (3.908471ms)
+✔ mask fixture: polygon/none (3.591487ms)
+✔ mask fixture: star/intersect (3.621421ms)
+✔ mask fixture: star/add (3.434483ms)
+✔ mask fixture: star/subtract (5.167773ms)
+✔ mask fixture: star/lighten (4.281479ms)
+✔ mask fixture: star/darken (4.279666ms)
+✔ mask fixture: star/difference (4.593725ms)
+✔ mask fixture: star/none (5.13275ms)
+✔ mask fixture: path/intersect (6.847322ms)
+✔ mask fixture: path/add (6.920031ms)
+✔ mask fixture: path/subtract (3.47331ms)
+✔ mask fixture: path/lighten (4.507767ms)
+✔ mask fixture: path/darken (3.729433ms)
+✔ mask fixture: path/difference (3.465269ms)
+✔ mask fixture: path/none (3.438068ms)
+✔ mask expansion, inversion, opacity, feather and transformed matte modes (50.987278ms)
+✔ adjustment mask is applied once and effects preserve XML order (8.456538ms)
+✔ image fit none and focus (6.250401ms)
+✔ image fit contain and focus (2.373897ms)
+✔ image fit cover and focus (3.605758ms)
+✔ image fit fill and focus (3.286331ms)
+✔ image fit scale-down and focus (3.646679ms)
+✔ image fit contain-blur and focus (8.513724ms)
+✔ source crop and flip affect content before fit (7.764333ms)
+✔ pattern tile, offset, scale, rotation and transparent samples (4.552984ms)
+✔ layouts row, column, grid and stack support spacing and alignment (6.733803ms)
+✔ relative alignment, safe areas and enforcement (59.236815ms)
+✔ output reframe reflow (2.552214ms)
+✔ output reframe crop (2.154971ms)
+✔ output reframe fit (1.808403ms)
+✔ output reframe fit-blur (5.987809ms)
+✔ sequence places children on distinct clocks and honors gaps (14.091579ms)
+✔ instances render scoped overrides and independent source clocks (13.565292ms)
+✔ repeat count, offsets, stagger, behaviours and expression contexts (21.01739ms)
+✔ repeat data rows allow safe field reads and scoped references (1.583717ms)
+✔ includes namespace IDs, tokens, overrides and relative asset dependencies (5.357386ms)
+✔ preflight detects geometry, masks, mesh, crop, recursion and expansion limits (3.276397ms)
+✔ instance fitting preserves vector resolution and mapped source time (38.266547ms)
+✔ nested includes resolve dependencies once and symbols get local references (3.805187ms)
+✔ baseline alignment uses first text baselines (61.834988ms)
+✔ mesh is bicubic, not bilinear, and placement animation keeps parent time (8.636788ms)
+✔ frame alignment compensates nested translation and group safe-area enforcement (4.893874ms)
+✔ trim and merge span repeater copies and transparent gradient stops do not bleed (0.580117ms)
+✔ adjustment blend applies to the filtered backdrop (5.129446ms)
+✔ instance procedural expressions repeat with their source clock (14.488823ms)
+✔ certification inventories the document root and every unique attribute/enum without treating parsing as behavior (122.432783ms)
+✔ fixed-step rigid motion has analytic acceleration, interpolated samples and independent seek order (11.199184ms)
+✔ collision, sensors, restitution, groups, activation, fixed rotation and shapes (200.703337ms)
+✔ physics spring joint constrains a driven body (13.929274ms)
+✔ physics distance joint constrains a driven body (8.730015ms)
+✔ physics pin joint constrains a driven body (7.829659ms)
+✔ physics rope joint constrains a driven body (10.878635ms)
+✔ physics hinge joint constrains a driven body (4.00227ms)
+✔ physics slider joint constrains a driven body (8.77344ms)
+✔ physics weld joint constrains a driven body (8.597598ms)
+✔ physics motor joint constrains a driven body (2.012317ms)
+✔ breakable joints and frame bounds (24.736333ms)
+✔ soft jelly: pins, shape deformation and replay (44.515198ms)
+✔ soft cloth: pins, shape deformation and replay (33.271197ms)
+✔ soft rope: pins, shape deformation and replay (6.99374ms)
+✔ physics checkpoint cache hash, rejection and replay (2.767976ms)
+✔ field directional is deterministic and observes temporal/radius limits (0.452166ms)
+✔ field wind is deterministic and observes temporal/radius limits (0.222553ms)
+✔ field radial is deterministic and observes temporal/radius limits (0.080029ms)
+✔ field vortex is deterministic and observes temporal/radius limits (0.128903ms)
+✔ field turbulence is deterministic and observes temporal/radius limits (0.444795ms)
+✔ field drag is deterministic and observes temporal/radius limits (0.208221ms)
+✔ field attractor-path is deterministic and observes temporal/radius limits (0.587367ms)
+✔ particle births, bursts, variance, curves and deterministic seeking (7.169473ms)
+✔ particle emitter point consumes geometry (0.578425ms)
+✔ particle emitter rect consumes geometry (0.339597ms)
+✔ particle emitter ellipse consumes geometry (0.180089ms)
+✔ particle emitter line consumes geometry (0.40831ms)
+✔ particle emitter path consumes geometry (0.735329ms)
+✔ particle emitter asset-alpha consumes geometry (0.608769ms)
+✔ particle smoke renders and honours explicit overrides (119.517282ms)
+✔ particle sparks renders and honours explicit overrides (46.058449ms)
+✔ particle dust renders and honours explicit overrides (54.718494ms)
+✔ particle rain renders and honours explicit overrides (81.080006ms)
+✔ particle snow renders and honours explicit overrides (67.857508ms)
+✔ particle confetti renders and honours explicit overrides (58.131544ms)
+✔ particle fire renders and honours explicit overrides (57.939358ms)
+✔ particle bubbles renders and honours explicit overrides (53.958949ms)
+✔ particle bokeh renders and honours explicit overrides (60.716983ms)
+✔ particle glitter renders and honours explicit overrides (41.670547ms)
+✔ deform bend is finite and changes geometry (0.781328ms)
+✔ deform twist is finite and changes geometry (0.141011ms)
+✔ deform wave is finite and changes geometry (0.05356ms)
+✔ deform squash is finite and changes geometry (0.043725ms)
+✔ deform stretch is finite and changes geometry (0.040791ms)
+✔ deform bulge is finite and changes geometry (0.041361ms)
+✔ deform pinch is finite and changes geometry (0.03392ms)
+✔ deform spherize is finite and changes geometry (0.036094ms)
+✔ deform ripple is finite and changes geometry (0.037205ms)
+✔ deform turbulence is finite and changes geometry (0.050115ms)
+✔ deform mesh-warp is finite and changes geometry (0.201081ms)
+✔ deform puppet is finite and changes geometry (0.431665ms)
+✔ deform corner-pin is finite and changes geometry (0.069063ms)
+✔ skin bind matrices, explicit weights and bone hierarchy (0.603442ms)
+✔ deformed raster and soft body are visible through compositor (123.633723ms)
+✔ tracking adapters interpolate real values and reject malformed content (2.183553ms)
+✔ transform constraints cover local/world position, rotation, scale, paths, distances and tracking (4.249299ms)
+✔ two-bone IK reaches target and bend direction changes elbow (0.725704ms)
+✔ parented rigid bodies bake rotation, scale, anchors and return equivalent local poses (13.226083ms)
+✔ kinematic bodies and soft pins follow parent animation in world coordinates (14.03364ms)
+✔ particle collisions bounce both axes and selected fields change trajectories (1.662895ms)
+✔ field filters, tracking point interpolation and AE channels preserve values (0.960175ms)
+✔ deformation rejects singular data and skin weights are applied through the compositor (65.005957ms)
+✔ physics alpha geometry, floor bounds, force filters and malformed caches fail concretely (18.266055ms)
+✔ cache added to an authored XML scene preserves simulation identity and pixels (23.561708ms)
+✔ every closed-form curve maps 0 to 0 and 1 to 1 (1.942252ms)
+✔ Penner curves match their closed forms (0.367329ms)
+✔ ease keywords are the CSS cubic-bezier curves (1.214195ms)
+✔ cubicBezier solves x for arbitrary handles, including steep ones (10.003938ms)
+✔ curves that need per-key data are refused here with a typed error (0.343803ms)
+✔ interpolates between keys with the default and per-key curves (11.678822ms)
+✔ holds outside the key range by default (0.725354ms)
+✔ supports every extrapolation mode on both sides (4.69784ms)
+✔ step, hold and steps curves (7.282011ms)
+✔ cubic-bezier reads key/@bezier (0.781808ms)
+✔ equal key times make a jump; the later key wins at that instant (0.672625ms)
+✔ local and normalized time bases follow the owning node span (1.530067ms)
+✔ reports what cannot be evaluated instead of approximating it (9.626294ms)
+✔ compiles every animation of The Last Floor episode 01 (264.152436ms)
+Traceback (most recent call last):
+  File "/workspace/scratch/7a0e0f20f2fa/code-review/src/render/fx/native.py", line 72, in <module>
+    else: raise ValueError('unknown native operation')
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: unknown native operation
+[OpenColorIO Info]: Color management disabled. (Specify the $OCIO environment variable to enable.)
+Traceback (most recent call last):
+  File "/workspace/scratch/7a0e0f20f2fa/code-review/src/render/fx/native.py", line 39, in <module>
+    if any(name not in prog for name in header.get('params',{})): raise ValueError('unknown or inactive shader uniform')
+                                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: unknown or inactive shader uniform
+✔ effect color-grade: finite, premultiplied mix endpoints, immutable input, deterministic seek (6.645571ms)
+✔ effect lift-gamma-gain: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.943464ms)
+✔ effect cdl: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.656736ms)
+✔ effect curves: finite, premultiplied mix endpoints, immutable input, deterministic seek (2.00083ms)
+✔ effect levels: finite, premultiplied mix endpoints, immutable input, deterministic seek (4.039816ms)
+✔ effect white-balance: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.349827ms)
+✔ effect exposure: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.079834ms)
+✔ effect hue-saturation: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.268576ms)
+✔ effect tonemap: finite, premultiplied mix endpoints, immutable input, deterministic seek (3.607671ms)
+✔ effect tint: finite, premultiplied mix endpoints, immutable input, deterministic seek (3.672318ms)
+✔ effect tritone: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.334644ms)
+✔ effect grayscale: finite, premultiplied mix endpoints, immutable input, deterministic seek (4.080978ms)
+✔ effect sepia: finite, premultiplied mix endpoints, immutable input, deterministic seek (0.819665ms)
+✔ effect invert: finite, premultiplied mix endpoints, immutable input, deterministic seek (0.80947ms)
+✔ effect posterize: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.004001ms)
+✔ effect threshold: finite, premultiplied mix endpoints, immutable input, deterministic seek (0.717812ms)
+✔ effect color-overlay: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.50577ms)
+✔ effect fill: finite, premultiplied mix endpoints, immutable input, deterministic seek (0.769279ms)
+✔ effect blur: finite, premultiplied mix endpoints, immutable input, deterministic seek (4.936466ms)
+✔ effect directional-blur: finite, premultiplied mix endpoints, immutable input, deterministic seek (6.5718ms)
+✔ effect radial-blur: finite, premultiplied mix endpoints, immutable input, deterministic seek (3.44604ms)
+✔ effect zoom-blur: finite, premultiplied mix endpoints, immutable input, deterministic seek (11.630358ms)
+✔ effect lens-blur: finite, premultiplied mix endpoints, immutable input, deterministic seek (3.813909ms)
+✔ effect tilt-shift: finite, premultiplied mix endpoints, immutable input, deterministic seek (7.297314ms)
+✔ effect bloom: finite, premultiplied mix endpoints, immutable input, deterministic seek (5.972274ms)
+✔ effect drop-shadow: finite, premultiplied mix endpoints, immutable input, deterministic seek (5.386739ms)
+✔ effect inner-shadow: finite, premultiplied mix endpoints, immutable input, deterministic seek (7.201131ms)
+✔ effect inner-glow: finite, premultiplied mix endpoints, immutable input, deterministic seek (3.217488ms)
+✔ effect long-shadow: finite, premultiplied mix endpoints, immutable input, deterministic seek (4.4103ms)
+✔ effect stroke: finite, premultiplied mix endpoints, immutable input, deterministic seek (8.374935ms)
+✔ effect outline: finite, premultiplied mix endpoints, immutable input, deterministic seek (6.367063ms)
+✔ effect matte-choke: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.311469ms)
+✔ effect sharpen: finite, premultiplied mix endpoints, immutable input, deterministic seek (7.534528ms)
+✔ effect unsharp-mask: finite, premultiplied mix endpoints, immutable input, deterministic seek (5.224817ms)
+✔ effect emboss: finite, premultiplied mix endpoints, immutable input, deterministic seek (7.235492ms)
+✔ effect bevel: finite, premultiplied mix endpoints, immutable input, deterministic seek (12.791564ms)
+✔ effect vignette: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.243217ms)
+✔ effect noise: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.351169ms)
+✔ effect pixelate: finite, premultiplied mix endpoints, immutable input, deterministic seek (2.627516ms)
+✔ effect mosaic: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.066874ms)
+✔ effect rgb-split: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.868442ms)
+✔ effect chromatic-aberration: finite, premultiplied mix endpoints, immutable input, deterministic seek (2.156212ms)
+✔ effect mirror: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.971135ms)
+✔ effect tile: finite, premultiplied mix endpoints, immutable input, deterministic seek (6.111472ms)
+✔ effect kaleidoscope: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.82733ms)
+✔ effect twirl: finite, premultiplied mix endpoints, immutable input, deterministic seek (5.606478ms)
+✔ effect bulge: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.670887ms)
+✔ effect spherize: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.671448ms)
+✔ effect lens-distortion: finite, premultiplied mix endpoints, immutable input, deterministic seek (5.435792ms)
+✔ effect wave-warp: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.730927ms)
+✔ effect ripple: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.247905ms)
+✔ effect turbulent-displace: finite, premultiplied mix endpoints, immutable input, deterministic seek (6.470659ms)
+✔ effect heat-haze: finite, premultiplied mix endpoints, immutable input, deterministic seek (5.664424ms)
+✔ effect displacement-map: finite, premultiplied mix endpoints, immutable input, deterministic seek (2.409401ms)
+✔ effect chroma-key: finite, premultiplied mix endpoints, immutable input, deterministic seek (7.028202ms)
+✔ effect luma-key: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.078321ms)
+✔ effect difference-key: finite, premultiplied mix endpoints, immutable input, deterministic seek (2.754146ms)
+✔ effect spill-suppress: finite, premultiplied mix endpoints, immutable input, deterministic seek (7.172178ms)
+✔ effect letterbox: finite, premultiplied mix endpoints, immutable input, deterministic seek (0.826054ms)
+✔ effect fractal-noise: finite, premultiplied mix endpoints, immutable input, deterministic seek (3.150708ms)
+✔ effect halation: finite, premultiplied mix endpoints, immutable input, deterministic seek (4.214077ms)
+✔ effect light-leak: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.948732ms)
+✔ effect light-sweep: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.455855ms)
+✔ effect glitch: finite, premultiplied mix endpoints, immutable input, deterministic seek (2.465995ms)
+✔ effect vhs: finite, premultiplied mix endpoints, immutable input, deterministic seek (3.374913ms)
+✔ effect god-rays: finite, premultiplied mix endpoints, immutable input, deterministic seek (6.278692ms)
+✔ effect lens-flare: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.126353ms)
+✔ effect glow: finite, premultiplied mix endpoints, immutable input, deterministic seek (4.740574ms)
+✔ effect film-grain: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.025392ms)
+✔ effect halftone: finite, premultiplied mix endpoints, immutable input, deterministic seek (0.989518ms)
+✔ effect scanlines: finite, premultiplied mix endpoints, immutable input, deterministic seek (0.54839ms)
+✔ effect echo: finite, premultiplied mix endpoints, immutable input, deterministic seek (2.198705ms)
+✔ effect posterize-time: finite, premultiplied mix endpoints, immutable input, deterministic seek (0.514189ms)
+✔ effect pixel-motion-blur: finite, premultiplied mix endpoints, immutable input, deterministic seek (105.223198ms)
+✔ effect gradient-overlay: finite, premultiplied mix endpoints, immutable input, deterministic seek (2.999863ms)
+✔ effect gradient-map: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.030711ms)
+✔ effect selective-color: finite, premultiplied mix endpoints, immutable input, deterministic seek (1.797626ms)
+✔ effect lut: finite, premultiplied mix endpoints, immutable input, deterministic seek (639.624008ms)
+✔ effect shader: finite, premultiplied mix endpoints, immutable input, deterministic seek (1016.211463ms)
+✔ effect lighting: finite, premultiplied mix endpoints, immutable input, deterministic seek (4.096551ms)
+✔ catalog exactly covers the schema effect enumeration (3.532609ms)
+✔ Gaussian impulse has conserved energy, symmetry and independent colour channels (2.404714ms)
+✔ pixel operators and straight-alpha grading match analytical references (1.276738ms)
+✔ grading channels, scalar and triple validation, range preservation (8.007286ms)
+✔ morphology, keys, silhouette shadows and separate blur kernels (17.959569ms)
+✔ effect ordering, animated mix/enabled, adjustment, group and legacy API (55.620866ms)
+✔ echo and posterize-time sample prior states before the effect; seeks do not accumulate history (21.838947ms)
+✔ transition cut: exact endpoints, finite midpoint and deterministic samples (1.052803ms)
+✔ transition crossfade: exact endpoints, finite midpoint and deterministic samples (0.137836ms)
+✔ transition additive-dissolve: exact endpoints, finite midpoint and deterministic samples (0.298256ms)
+✔ transition dip-to-color: exact endpoints, finite midpoint and deterministic samples (0.191907ms)
+✔ transition wipe: exact endpoints, finite midpoint and deterministic samples (0.563332ms)
+✔ transition slide: exact endpoints, finite midpoint and deterministic samples (1.222156ms)
+✔ transition push: exact endpoints, finite midpoint and deterministic samples (0.904782ms)
+✔ transition cover: exact endpoints, finite midpoint and deterministic samples (0.846886ms)
+✔ transition reveal: exact endpoints, finite midpoint and deterministic samples (0.877592ms)
+✔ transition zoom-in: exact endpoints, finite midpoint and deterministic samples (0.932403ms)
+✔ transition zoom-out: exact endpoints, finite midpoint and deterministic samples (1.387013ms)
+✔ transition spin: exact endpoints, finite midpoint and deterministic samples (1.618409ms)
+✔ transition whip-pan: exact endpoints, finite midpoint and deterministic samples (2.982988ms)
+✔ transition circle-open: exact endpoints, finite midpoint and deterministic samples (0.369573ms)
+✔ transition circle-close: exact endpoints, finite midpoint and deterministic samples (0.444154ms)
+✔ transition iris: exact endpoints, finite midpoint and deterministic samples (0.274941ms)
+✔ transition clock-wipe: exact endpoints, finite midpoint and deterministic samples (0.2609ms)
+✔ transition radial-wipe: exact endpoints, finite midpoint and deterministic samples (0.229242ms)
+✔ transition barn-door: exact endpoints, finite midpoint and deterministic samples (0.335852ms)
+✔ transition blinds: exact endpoints, finite midpoint and deterministic samples (0.249072ms)
+✔ transition luma: exact endpoints, finite midpoint and deterministic samples (1.248927ms)
+✔ transition blur: exact endpoints, finite midpoint and deterministic samples (1.803715ms)
+✔ transition glitch: exact endpoints, finite midpoint and deterministic samples (0.866275ms)
+✔ transition pixelize: exact endpoints, finite midpoint and deterministic samples (5.099942ms)
+✔ transition film-roll: exact endpoints, finite midpoint and deterministic samples (0.897051ms)
+✔ transition stripe: exact endpoints, finite midpoint and deterministic samples (0.243965ms)
+✔ transition squash: exact endpoints, finite midpoint and deterministic samples (0.785034ms)
+✔ transition shuffle: exact endpoints, finite midpoint and deterministic samples (0.795559ms)
+✔ transition carousel: exact endpoints, finite midpoint and deterministic samples (2.81064ms)
+✔ transition light-leak: exact endpoints, finite midpoint and deterministic samples (0.203163ms)
+✔ transition morph: exact endpoints, finite midpoint and deterministic samples (5.229905ms)
+✔ transition shader: exact endpoints, finite midpoint and deterministic samples (539.773967ms)
+✔ transition flip: exact endpoints, finite midpoint and deterministic samples (1.239703ms)
+✔ transition cube: exact endpoints, finite midpoint and deterministic samples (1.038392ms)
+✔ transition page-curl: exact endpoints, finite midpoint and deterministic samples (28.821271ms)
+✔ transition handles keep both adjacent shots live; masks and nested clocks still apply (41.762115ms)
+✔ transition masks, directions, error paths and audio amplitudes (0.935538ms)
+✔ shutter integrates analytic time, phase, adaptive constancy and per-node flags (34.627808ms)
+✔ invalid native dependencies, missing inputs and unsupported effects fail explicitly (147.866414ms)
+✔ working primaries roundtrip, transfer encoding, HDR and alpha are numerically preserved (11.050044ms)
+✔ ordered looks, working precision, display validation and output transfer (180.282427ms)
+✔ AgX, ACES 2, Filmic and PQ EETF use distinct measured display transforms (991.887727ms)
+✔ OCIO config resolves actual FileTransforms, preserves alpha and rejects escaping resources (358.142819ms)
+✔ LUT .cube, CLF, 3DL and GLSL uniforms produce reference pixels (1190.699812ms)
+✔ media handles extend trim bounds, including reverse playback (0.296463ms)
+✔ temporal adjustment reads the preceding backdrop, including reordered samples (10.15512ms)
+✔ segmented render, resumed cache and shards retain transition pixels and LUT dependency hashes (10388.954678ms)
+✔ embedded audio follows transition handles and equal-power amplitude at the visual midpoint (9125.445808ms)
+✔ native identities and typed shader uniforms are stable and validated (223.734036ms)
+✔ overlay and fill have distinct alpha semantics; numeric budgets fail explicitly (2.624161ms)
+✔ animated motion blur toggles and group inheritance use the evaluated node state (16.063004ms)
+✔ adjustment shutter samples its backdrop and gradient-map accepts a paint source (17.4992ms)
+✔ full fragment main and raw display bypass have explicit semantics (252.411869ms)
+✔ display selection keeps the public Surface in linear sRGB until output encoding (0.773496ms)
+✔ asset paths, symlinks and generated providers are frozen and audited (36.200544ms)
+✔ representations select bytes and replace declared dimensions/hash (7.772535ms)
+✔ linear premultiplied alpha survives resize and PNG roundtrip without dark fringes (48.503593ms)
+✔ video sampling, blend, rotation and source-time policies are random-access (831.363252ms)
+✔ sequences expand all dependencies and enforce missing-frame policies (68.252668ms)
+✔ specialized assets draw deterministic procedural images, codes, vectors, formulas and charts (384.206795ms)
+✔ font cascade preserves explicitly specified defaults and text layout supports RTL and variable fonts (449.567972ms)
+✔ text selectors, presets and paths are deterministic at arbitrary times (3.422725ms)
+✔ audio spectrum and audiograms are seek invariant; embedded video audio is placed on its bus (1286.537852ms)
+✔ media integration renders full video, reuses fixed bytes and writes provenance (7689.912985ms)
+✔ Lottie JSON, dotLottie, segments and slots use the offline player (204.87914ms)
+✔ mesh import accepts OBJ/MTL, PLY, glTF/GLB, splats and USD packages (820.230778ms)
+✔ variable font axis changes pixels; per-glyph animation, selectors and paths reach the compositor (354.460498ms)
+✔ high precision EXR, image orientation and layered images retain their declared semantics (556.925423ms)
+✔ evicted image/sequence frames decode identically and detect changed sources (615.926209ms)
+✔ optical flow and timeRemap use source seconds, independent of frame request order (262.170412ms)
+✔ SVG dependencies are contained, painted text uses gradients, and transparent codes export alpha (121.600954ms)
+✔ FBX geometry is imported through Assimp (71.093762ms)
+✔ colour emoji and WOFF containers render with the declared font (66.963275ms)
+✔ explicit tracks preserve a selected mono video stream on both output channels (2290.597484ms)
+✔ audio stream timestamp offsets remain synchronized with video source time (120.285289ms)
+✔ Cycles reports its pinned CPU runtime and renders finite PBR pixels deterministically (2736.901662ms)
+✔ native primitives, extruded paths, text and bevel create visible silhouettes (6753.813782ms)
+✔ lighting and physical material controls change rendered radiance (9974.183262ms)
+✔ native DOF, lens distortion, shake, hierarchy, constraints and shutter sampling are observable (4009.036946ms)
+✔ threeD planes preserve 2D colour and alpha, while rotating changes projected area (1355.637104ms)
+✔ 360 layouts and stereo produce finite frames (3536.694337ms)
+✔ MaterialX standard surface is compiled as an OSL closure and replaces XML material parameters (928.763557ms)
+✔ 3D shutter integration samples moving geometry and respects motionBlur off (3959.066042ms)
+✔ PBR image maps, fonts, follow paths and instance parenting are exercised by native renders (1990.434134ms)
+✔ OpenPBR MaterialX graph and visible environment render without geometry (1307.573894ms)
+✔ verdicts were recorded against the current schema (1.913078ms)
+✔ agrees with libxml2 on every corpus document (3389.492762ms)
+✔ audio format validation, silence and all fade curves (12.929452ms)
+✔ sample-accurate trim, negative start, repeats, reverse, speed, BPM fit and marker placement (2069.488816ms)
+✔ bus output routes exactly once; track/bus ducking follows audible signal, threshold, release and cycle checks (1206.129471ms)
+✔ all 16 DSP types run, bypass/mix are exact and delay/reverb retain tails (548.929909ms)
+✔ DSP transfer functions, EQ bands, detector gain and automation affect actual samples (105.95473ms)
+✔ normalization, independent true-peak limiter, silence, PCM bit depth, channels/rate and report (1756.7128ms)
+✔ pitch shift and preservePitch are verified by measured frequency, with independent sample clocks (659.147916ms)
+✔ multichannel routing preserves channel identity and rejects implicit ambisonic conversion (865.870462ms)
+✔ effect controls consume runtime automation, named parameters, fades, wet mixes and long delays (554.945479ms)
+✔ gain and pan envelopes multiply the actual track and bus samples (519.340101ms)
+✔ source clocks clamp, loop, reverse and reject invalid intervals (0.534939ms)
+✔ parameter-space SVG traversal handles lines, cubic, quadratic, elliptical arcs and empty paths (14.007057ms)
+✔ hash01 is deterministic, in [0,1) and varies with every argument (1.577067ms)
+✔ film grain is zero-mean, bounded by amount x mix, frame-dependent and skips transparent pixels (6.352553ms)
+✔ halftone leaves white untouched and darkens a darker area with a dot screen (3.403015ms)
+✔ scanlines darken the first half of each period (0.341831ms)
+✔ blur preserves the mean and spreads an impulse (1.755183ms)
+✔ glow adds tinted light around the element (1.698719ms)
+✔ ellipse mask keeps the inside, clears the outside and ramps across the feather (3.065821ms)
+✔ rain draws deterministic falling streaks, pre-rolled and bounded (9.99421ms)
+✔ drawRotated turns about the pivot and keeps the pivot in place (0.847997ms)
+✔ seed32 takes the low 32 bits of bigint seeds (1.27796ms)
+✔ PNG round-trip and box-filtered reduction (3.467782ms)
+✔ draws background, z-ordered shapes, tokens and clipped groups (16.637544ms)
+✔ group opacity, animated layer position, scale and anchor, stroked and rounded shapes (29.696879ms)
+✔ text layers are laid out once and cached (79.872883ms)
+✔ applies group effects and masks, shape glow, rain and rotation (248.041412ms)
+✔ reports every feature it cannot draw instead of ignoring it (10.063759ms)
+✔ group transforms and animated scale are rendered (7.819606ms)
+✔ renders an episode end to end, then resumes from finished segments (6906.60401ms)
+✔ parallel shards render disjoint segments, then the parent assembles from cache (4690.240125ms)
+✔ available mode renders complete segments, skips the rest, and keys segments by their own images (3908.454563ms)
+✔ refuses to render with missing assets, unknown outputs or unsupported features (629.993751ms)
+✔ unsupported segments never become reusable after a failed render (111.925212ms)
+✔ partial exports select the same frames and rebase captions with cold and warm caches (6397.727431ms)
+✔ font byte changes invalidate segments even when the XML is unchanged (3896.360701ms)
+✔ audio without clipOut renders using declared or probed asset duration (1967.901223ms)
+✔ animated z and effect strength are consumed by the raster backend (46.37367ms)
+✔ operational API and CLI distinguish schema validity, runtime rules and backend capabilities (13.212806ms)
+✔ full pipeline applies variants, marker placements, expressions and audio automation, with distinct cache keys (5639.477858ms)
+✔ parses hex, normalised and token colours into linear straight alpha (3.388404ms)
+✔ encodes linear back to sRGB bytes exactly at the ends (0.211356ms)
+✔ fillRect covers fractional edges by area and respects the clip (0.340228ms)
+✔ source-over blending in premultiplied linear space (0.162473ms)
+✔ strokeRect draws a frame and leaves the inside untouched (4.307447ms)
+✔ roundedRect fills, strokes and rounds its corners (0.742851ms)
+✔ drawSurface translates exactly on integers and interpolates otherwise (0.448209ms)
+✔ toRgb8 encodes to sRGB bytes (0.290133ms)
+✔ a unit square covers exactly its pixels, including half pixels (2.393907ms)
+✔ nonzero winding keeps the counter of an O-like shape empty (0.26059ms)
+✔ curves are flattened into closed outlines (0.323093ms)
+✔ wrap breaks at words and honours explicit newlines (2.259156ms)
+✔ renderText shrinks to fit, aligns and paints coverage in the given colour (209.351966ms)
+✔ typed tracks blend linear-light colors, discrete strings, numeric addition and z ordering (24.978317ms)
+✔ spring solves under, critical and over damping and advanced key curves remain finite (6.989725ms)
+✔ marker offsets, generated beats and rational timecodes resolve before evaluation (13.682928ms)
+✔ expressions are pure and random access, with seeded built-ins and no escape syntax (32.350734ms)
+✔ expression built-ins map ranges, query dependencies and reject cycles before rendering (15.831629ms)
+✔ links apply mapping, clamping, delay and deterministic smoothing (12.254323ms)
+✔ SVG motion paths consume animated progress, arc length, orientation and native segments (5.664545ms)
+✔ parameters bind with declared precedence, constraints, substitution and data rows (21.159601ms)
+✔ conditions and evaluated paints reach pixels; skipped branches do not draw (5.663835ms)
+✔ operational preflight reports ignored sections, values, attributes, and cross-field rules (4.076352ms)
+✔ nested group clocks and sequence placement preserve local/normalized time (1.428234ms)
+✔ instances have independent clocks and local overrides (2.465624ms)
+✔ loop expressions and finite extrapolation are independent of evaluation order (4.444542ms)
+✔ loop expressions use the owning local clock and invalid loop arguments fail explicitly (2.749218ms)
+✔ animated color tokens resolve, and invalid references or handle combinations are diagnosed (6.067867ms)
+✔ loads a valid scene into a typed, frozen tree with an ID index (11.761196ms)
+✔ attributesOf refuses a node of another type (2.381139ms)
+✔ reports parse, policy and schema failures without a tree (5.531437ms)
+✔ resolves url(#id) paint references against paints/* (5.259599ms)
+✔ resolves var(--name) colour tokens against styles/token (4.471252ms)
+✔ ignores reference-like text in attributes that are not paints or colours (2.735638ms)
+✔ does not run semantic checks when schema validation failed (1.83314ms)
+✔ analytic perspective, orthographic and rotation (2.366237ms)
+✔ near/far clipping intersects attributes before division (0.939934ms)
+✔ depth and transparency are independent of submission order; no shared-edge seams (0.81011ms)
+✔ perspective texture mapping samples a projected plane correctly (0.522561ms)
+✔ box: finite outward geometry and visible render (1.415446ms)
+✔ plane: finite outward geometry and visible render (0.674198ms)
+✔ sphere: finite outward geometry and visible render (9.614278ms)
+✔ cylinder: finite outward geometry and visible render (1.577718ms)
+✔ cone: finite outward geometry and visible render (0.854266ms)
+✔ torus: finite outward geometry and visible render (1.794491ms)
+✔ capsule: finite outward geometry and visible render (1.35118ms)
+✔ geometry input errors and static hierarchy conversion (1.250178ms)
+✔ scene geometry, camera selection and temporal visibility (1168.943232ms)
+✔ camera target, parent transforms, animation and reordered seeking (34.428893ms)
+✔ alpha mask, object opacity, emissive exposure and static imported mesh cache (18.11531ms)
+✔ pending capabilities fail explicitly before rendering (1.943424ms)
+✔ geometry transitions preserve endpoints, transform silhouettes and respect direction (100.844193ms)
+✔ mirrored geometry retains the front face and accepts 2D parenting and shadow animation (14.219969ms)
+✔ real imported OBJ renders through encoder, resumes, and invalidates on geometry change (3729.292039ms)
+✔ object3D matte isolates its projected silhouette and hides it from the main pass (15.704848ms)
+✔ parses elements, attributes, text and namespaces into a tree (7.452808ms)
+✔ drops namespace declarations from the attribute list (0.244285ms)
+✔ normalises whitespace characters in attribute values per XML 1.0 (5.003487ms)
+✔ ignores comments and processing instructions (0.85648ms)
+✔ reports malformed XML with a location (0.397123ms)
+✔ reports an unbound namespace prefix (0.209934ms)
+✔ rejects empty input and a missing root (0.262683ms)
+✔ rejects any DOCTYPE, which closes entity-expansion attacks (0.278747ms)
+✔ enforces the size, depth and element-count limits (0.282753ms)
+✔ measures the size limit in UTF-8 bytes (0.143515ms)
+✔ compiles types, groups, attribute groups, extensions and the root element (11.177403ms)
+✔ refuses constructs outside the supported subset instead of guessing (10.618218ms)
+✔ compiles the scene-render 1.1 schema (64.892184ms)
+✔ accepts a sequence with optional and repeated members (2.331584ms)
+✔ reports the first unexpected child with the names that were allowed (0.312326ms)
+✔ reports incomplete content with the names still required (0.209473ms)
+✔ repeating choices accept any order and count occurrences (0.464004ms)
+✔ handles nested groups, zero-max particles and nullable inner content (0.398496ms)
+✔ bounded element repetition counts down exactly (0.181021ms)
+✔ interned state count stays bounded on deeply ambiguous repetition (9.221435ms)
+✔ emits attribute interfaces with defaults made non-optional (1.573862ms)
+✔ refuses identifier collisions (1.34484ms)
+✔ emits a model module that round-trips the model (5.964183ms)
+✔ committed generated files match a fresh generation from the schema (72.31024ms)
+✔ anchors the whole value (1.061417ms)
+✔ treats ^ and $ as literals outside a class, as XSD does (0.155002ms)
+✔ accepts the single-character escapes used by the scene schema (0.172478ms)
+✔ maps the XSD wildcard to anything except CR and LF (0.148442ms)
+✔ translates every pattern in the scene schema to a valid JS regex (0.507258ms)
+✔ refuses constructs whose XSD semantics differ from JS (0.410914ms)
+✔ xs:double accepts the XSD 1.0 lexical space and collapses whitespace (3.504376ms)
+✔ integer builtins enforce their value ranges (0.253769ms)
+✔ integers beyond 2^53 are flagged unsafe instead of silently rounded (0.145918ms)
+✔ xs:boolean accepts exactly true, false, 1 and 0 (0.199989ms)
+✔ xs:string preserves whitespace; name types collapse and check the Name production (0.485625ms)
+✔ list builtins split on whitespace and require at least one item (2.73714ms)
+✔ xs:dateTime validates calendar fields and time zones (0.524264ms)
+✔ numeric facets compare in the value space (0.550082ms)
+✔ enumeration compares values, patterns alternate within a step and conjoin across steps (0.773365ms)
+✔ length facets count code points for strings and items for lists (0.790852ms)
+✔ unions take the first member that accepts the value (0.272758ms)
+✔ reports identity kinds through derivation and lists (0.134732ms)
+✔ reports whether a type reaches a named type through derivation (0.181111ms)
+✔ rejects malformed type definitions when first used (0.447689ms)
+✔ decodes a valid document into a typed tree with defaults applied (3.927469ms)
+✔ reports each attribute problem with its code (0.948908ms)
+✔ accepts xsi schema-location hints and refuses xsi:type and xsi:nil (0.528389ms)
+✔ reports content-model violations with the expected names (2.118136ms)
+✔ still validates the children of a misplaced but known element (0.185577ms)
+✔ reports text and child elements where the content type forbids them (0.832935ms)
+✔ checks namespaces and the root element (0.336513ms)
+✔ enforces ID uniqueness and IDREF resolution across the document (0.364255ms)
+✔ flags integers beyond 2^53 as a semantic error (0.284245ms)
+✔ stops collecting after the diagnostic cap (1.718298ms)
+ℹ tests 642
+ℹ suites 0
+ℹ pass 642
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 54372.822292
+ℹ start of coverage report
+ℹ -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ file                     | line % | branch % | funcs % | uncovered lines
+ℹ -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ src                      |        |          |         | 
+ℹ  assets.js               | 100.00 |    98.57 |  100.00 | 
+ℹ  cli.js                  | 100.00 |    97.54 |   90.00 | 
+ℹ  diagnostics.js          | 100.00 |   100.00 |  100.00 | 
+ℹ  eval                    |        |          |         | 
+ℹ   clock.js               | 100.00 |    96.70 |   93.33 | 
+ℹ   curves.js              | 100.00 |    98.89 |  100.00 | 
+ℹ   expression.js          |  99.47 |    96.59 |  100.00 | 142
+ℹ   path.js                | 100.00 |    77.55 |  100.00 | 
+ℹ   runtime.js             |  98.15 |    89.22 |   95.31 | 95-96 120-121 504-505 534-538
+ℹ   track.js               |  97.97 |    94.97 |   97.30 | 75-77 351-355
+ℹ   value.js               | 100.00 |    96.88 |  100.00 | 
+ℹ  index.js                | 100.00 |   100.00 |  100.00 | 
+ℹ  media                   |        |          |         | 
+ℹ   audio.js               | 100.00 |    86.49 |  100.00 | 
+ℹ   canvas-paint.js        | 100.00 |   100.00 |  100.00 | 
+ℹ   clock.js               | 100.00 |    90.00 |   80.00 | 
+ℹ   color.js               | 100.00 |    97.96 |  100.00 | 
+ℹ   decode-frame.js        | 100.00 |   100.00 |  100.00 | 
+ℹ   decode.js              |  95.95 |    89.47 |   80.00 | 75-77 82-83 238-242
+ℹ   font-container.js      | 100.00 |    81.25 |  100.00 | 
+ℹ   lottie.js              | 100.00 |    90.00 |   80.00 | 
+ℹ   manager.js             |  91.64 |    92.19 |   60.42 | 112-123 158-159 374-376 382-387 443-458 465-468 542-545
+ℹ   mesh.js                | 100.00 |    93.33 |  100.00 | 
+ℹ   resolve.js             | 100.00 |    92.75 |  100.00 | 
+ℹ   sequence.js            | 100.00 |    88.89 |  100.00 | 
+ℹ   special.js             |  98.74 |    87.50 |   96.00 | 134-138 304
+ℹ   svg.js                 |  88.57 |    42.86 |   75.00 | 17-20
+ℹ   text-animation.js      | 100.00 |    94.12 |  100.00 | 
+ℹ   text.js                |  88.79 |    80.93 |   92.16 | 80-81 151-158 192-195 208 282-283 327-330 332-334 457-458 481-499 717-725 728-730 736-744 746-751 758 785-799 803 805-810 869-871
+ℹ  render                  |        |          |         | 
+ℹ   accessibility.js       |  98.13 |    87.84 |  100.00 | 209-213
+ℹ   audio-analysis.js      | 100.00 |    97.67 |  100.00 | 
+ℹ   audio-dsp.js           | 100.00 |    95.71 |  100.00 | 
+ℹ   audio-stems.js         | 100.00 |   100.00 |  100.00 | 
+ℹ   audio.js               | 100.00 |    97.98 |  100.00 | 
+ℹ   automation.js          | 100.00 |    80.00 |  100.00 | 
+ℹ   cache.js               | 100.00 |   100.00 |  100.00 | 
+ℹ   caption-languages.js   | 100.00 |    50.00 |  100.00 | 
+ℹ   caption-render.js      |  97.53 |    60.00 |   91.67 | 107-112
+ℹ   captions.js            | 100.00 |    94.33 |   97.96 | 
+ℹ   color-management.js    |  89.45 |    84.30 |  100.00 | 137-153 156-157 204-224
+ℹ   color.js               | 100.00 |    91.18 |  100.00 | 
+ℹ   compatibility.js       | 100.00 |    93.75 |  100.00 | 
+ℹ   compositor.js          |  94.88 |    93.83 |   86.08 | 447-452 787-788 792-794 872 876-883 1045-1046 1070 1072-1115
+ℹ   delivery.js            | 100.00 |    87.14 |  100.00 | 
+ℹ   dynamics               |        |          |         | 
+ℹ    collision.js          | 100.00 |    96.15 |  100.00 | 
+ℹ    constraints.js        | 100.00 |    96.67 |  100.00 | 
+ℹ    deform.js             |  98.93 |    86.67 |   95.24 | 309-312
+ℹ    fbx.js                | 100.00 |   100.00 |  100.00 | 
+ℹ    fields.js             |  98.25 |    74.19 |  100.00 | 55
+ℹ    particle-collision.js | 100.00 |    92.11 |  100.00 | 
+ℹ    particles.js          |  96.39 |    81.25 |   85.71 | 360-362 399-415
+ℹ    physics.js            |  97.89 |    80.07 |   97.73 | 89-91 164-165 549-551 633 767-774
+ℹ    puppet.js             | 100.00 |   100.00 |  100.00 | 
+ℹ    tracking.js           | 100.00 |    83.18 |   95.45 | 
+ℹ   effects.js             | 100.00 |    93.98 |  100.00 | 
+ℹ   export-metadata.js     | 100.00 |    80.00 |   92.31 | 
+ℹ   export.js              |  99.07 |    95.67 |  100.00 | 166-167 185-186
+ℹ   frame.js               |  83.13 |    77.08 |   89.58 | 239 269-273 345-349 450-454 459-483 518-551 567-569 580-591 596-607 622-624 631-647
+ℹ   fx                     |        |          |         | 
+ℹ    grade.js              | 100.00 |    97.18 |  100.00 | 
+ℹ    native.js             | 100.00 |    97.96 |  100.00 | 
+ℹ    pixels.js             | 100.00 |   100.00 |  100.00 | 
+ℹ    processor.js          |  97.41 |    88.28 |   88.89 | 234-235 258-263
+ℹ    spatial.js            | 100.00 |    97.19 |  100.00 | 
+ℹ   geometry               |        |          |         | 
+ℹ    blend.js              | 100.00 |   100.00 |  100.00 | 
+ℹ    layout.js             | 100.00 |    98.17 |  100.00 | 
+ℹ    matrix.js             | 100.00 |   100.00 |  100.00 | 
+ℹ    paint.js              | 100.00 |    83.17 |  100.00 | 
+ℹ    path.js               |  97.27 |    85.89 |  100.00 | 158-165
+ℹ   image.js               | 100.00 |   100.00 |  100.00 | 
+ℹ   integrity.js           | 100.00 |   100.00 |  100.00 | 
+ℹ   output-lock.js         | 100.00 |   100.00 |  100.00 | 
+ℹ   pipeline.js            |  97.06 |    91.58 |   92.45 | 132-133 287 290-291 612-616 626-627 778 886 888-904 929-930
+ℹ   process.js             |  97.73 |    94.74 |   87.50 | 37-38
+ℹ   shutter.js             |  94.59 |    83.33 |  100.00 | 35-36
+ℹ   stills.js              |  95.65 |    90.00 |  100.00 | 22
+ℹ   surface.js             | 100.00 |   100.00 |  100.00 | 
+ℹ   text.js                | 100.00 |   100.00 |  100.00 | 
+ℹ   three                  |        |          |         | 
+ℹ    geometry.js           | 100.00 |    98.75 |  100.00 | 
+ℹ    materialx.js          | 100.00 |    95.65 |  100.00 | 
+ℹ    metadata.js           |  96.58 |    78.57 |  100.00 | 20-24
+ℹ    native.js             |  98.15 |    86.00 |   93.94 | 396-404
+ℹ    pass.js               | 100.00 |    87.18 |  100.00 | 
+ℹ    projection-mesh.js    | 100.00 |   100.00 |  100.00 | 
+ℹ    raster.js             | 100.00 |    98.55 |  100.00 | 
+ℹ    scene.js              |  98.91 |    72.94 |  100.00 | 121-122
+ℹ    transitions.js        | 100.00 |    97.06 |  100.00 | 
+ℹ   transitions.js         | 100.00 |    93.56 |  100.00 | 
+ℹ  scene                   |        |          |         | 
+ℹ   conformance.js         | 100.00 |   100.00 |  100.00 | 
+ℹ   expand.js              |  97.43 |    86.90 |   90.70 | 39-40 43-45 60-62
+ℹ   parameters.js          | 100.00 |    94.63 |   95.83 | 
+ℹ   preflight.js           |  97.35 |    79.13 |  100.00 | 124-126 212-215 473-476 516 550-552 641 666 694-696
+ℹ   semantic.js            | 100.00 |    96.67 |  100.00 | 
+ℹ  xml                     |        |          |         | 
+ℹ   parse.js               |  98.76 |    97.50 |  100.00 | 153-154
+ℹ  xsd                     |        |          |         | 
+ℹ   builtins.js            | 100.00 |   100.00 |  100.00 | 
+ℹ   compile.js             | 100.00 |    98.84 |  100.00 | 
+ℹ   content.js             | 100.00 |    99.07 |  100.00 | 
+ℹ   emit.js                | 100.00 |    97.22 |  100.00 | 
+ℹ   regex.js               | 100.00 |   100.00 |  100.00 | 
+ℹ   simple.js              | 100.00 |    98.29 |  100.00 | 
+ℹ   validate.js            | 100.00 |   100.00 |  100.00 | 
+ℹ -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ all files                |  97.54 |    91.19 |   95.14 | 
+ℹ -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ end of coverage report
+Behavioral evidence: 38/3249 items. Suite: passed. Report: /workspace/scratch/7a0e0f20f2fa/code-review/docs/conformance-report.json

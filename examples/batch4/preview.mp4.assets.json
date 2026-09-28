@@ -1,0 +1,85 @@
+{
+  "renderer": "6",
+  "native": {
+    "numpy": "2.3.5",
+    "OpenColorIO": "2.5.1",
+    "ModernGL": "5.12.0",
+    "renderer": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "version": "4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.2"
+  },
+  "assets": [
+    {
+      "id": "inter",
+      "kind": "font",
+      "source": "assets/inter.woff2",
+      "files": [
+        {
+          "src": "assets/inter.woff2",
+          "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+        }
+      ]
+    },
+    {
+      "id": "brand",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "title1",
+      "kind": "text",
+      "files": [
+        {
+          "src": "assets/inter.woff2",
+          "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+        }
+      ]
+    },
+    {
+      "id": "title2",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "title3",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "sub1",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "sub2",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "sub3",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "footer",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "bed",
+      "kind": "audio",
+      "source": "assets/bed.wav",
+      "files": [
+        {
+          "src": "assets/bed.wav",
+          "sha256": "42cff2b7e867337a7f9de1407f23389ded2cdd202c211f87b0c9ab72ccc02644"
+        }
+      ]
+    }
+  ],
+  "effectResources": [
+    {
+      "src": "assets/color-wave.glsl",
+      "sha256": "c2e53b0c35f479a40736655c9b89249819e92e1bada0465faae59f165a7d4b42"
+    }
+  ]
+}

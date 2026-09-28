@@ -1,0 +1,25 @@
+<scene version="1.1">
+  <project width="320" height="180" fps="30000/1001" duration="4" background="#111827" seed="42"/>
+  <parameters>
+    <param id="distance" type="number" default="220" min="0" max="260"/>
+    <param id="brand" type="color" default="#22D3EE"/>
+    <bind param="brand" target="card" property="fill"/>
+    <variant id="warm"><set param="brand" value="#FB923C"/></variant>
+  </parameters>
+  <output id="main" path="batch1.mp4" codec="h264" container="mp4" preset="fast" audio="false"/>
+  <markers><marker id="intro" time="0.25"/><beatGrid bpm="120"/></markers>
+  <composition>
+    <shape id="rail" shape="rounded-rect" x="20" y="80" width="280" height="20" radius="10" fill="#334155"/>
+    <shape id="card" shape="rounded-rect" startMarker="intro" x="20" y="60" width="40" height="60" radius="8" fill="#22D3EE">
+      <expression property="x">20 + ease(time,0.25,3.75,0,param("distance"))</expression>
+      <animate property="fill"><key time="0" value="{{brand}}"/><key time="0" marker="bar.1" value="#A78BFA"/></animate>
+      <animate property="z"><key time="0" value="1"/><key time="4" value="3"/></animate>
+    </shape>
+    <shape id="dot" shape="rect" width="8" height="8" fill="#F8FAFC" condition="time &gt;= 0.25">
+      <link property="opacity" source="card.x" scale="0.003" offset="0.2" min="0.1" max="1" delay="0.1" smoothing="0.2"/>
+      <motionPath path="M20 140 Q160 20 280 140" start="0" end="4">
+        <animate property="progress"><key time="0" value="0"/><key time="4" value="1"/></animate>
+      </motionPath>
+    </shape>
+  </composition>
+</scene>

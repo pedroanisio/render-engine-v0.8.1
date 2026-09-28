@@ -1,0 +1,2 @@
+# Used by the loopback SFTP conformance fixture only.
+paramiko==3.5.1

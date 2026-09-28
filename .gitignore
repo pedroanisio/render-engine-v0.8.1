@@ -1,0 +1,7 @@
+node_modules/
+_tmp/
+
+.venv-3d/
+__pycache__/
+*.pyc
+.agent-tasks/

@@ -1,0 +1,6 @@
+usd-core==26.8
+OpenEXR==3.4.13
+opencolorio==2.5.1
+moderngl==5.12.0
+glcontext==3.0.0
+numpy==2.3.5

@@ -1,0 +1,24 @@
+<scene version="1.1">
+<project width="640" height="360" fps="12" duration="3" background="#00000000" seed="7"/>
+<metadata title="Batch 7 — Exportação verificada" author="Scene-render" copyright="Original demonstration" language="pt-BR"><meta name="purpose" value="Native export integration fixture"/></metadata>
+<styles><textStyle id="title" fontAsset="inter" size="40" color="#F4F8FC"/><textStyle id="body" fontAsset="inter" size="20" color="#A7C0D2"/></styles>
+<output id="main" path="preview.mp4" codec="h264" container="mp4" audio="false" crf="18" preset="medium" colorSpace="rec709" transfer="bt1886">
+<poster path="poster.png" time="1.5" format="png" width="640"/><thumbnail path="thumbnail.jpeg" marker="detail" format="jpeg" width="320" quality="0.85"/><thumbnail path="thumbnail.webp" marker="detail" format="webp" width="320" quality="0.85"/><thumbnail path="thumbnail.avif" marker="detail" format="avif" width="320" quality="0.75"/>
+</output>
+<output id="web" path="preview.webp" codec="webp" width="320" height="180" loopCount="0"/>
+<output id="alpha" path="master-alpha.mkv" codec="ffv1" alpha="true" audio="false" width="320" height="180" start="1" end="2"/>
+<output id="linear" path="frames/master-%04d.exr" codec="exr-sequence" alpha="true" width="320" height="180" start="1" end="1.083333" colorSpace="linear-srgb" transfer="linear"/>
+<assets><font id="inter" src="assets/inter.woff2" family="Inter" license="SIL OFL 1.1"/>
+<text id="heading" size="40" text="Exportação verificada" style="title" width="560" height="60"/>
+<text id="sub" size="20" text="Formatos reais. Quadros preservados." style="body" width="540" height="36"/>
+<text id="chips" size="20" text="HDR  /  ALPHA  /  ÁUDIO  /  STILLS" style="body" color="#6BE7CE" width="540" height="36"/>
+<text id="footer" text="Scene-render JS  ·  Batch 7" style="body" size="16" width="540" height="28"/>
+</assets><markers><marker id="detail" time="1.5" label="Exportação"/></markers>
+<composition>
+<shape id="card" shape="rounded-rect" x="16" y="16" width="608" height="328" radius="22" fill="#101D2EF2" stroke="#284B65" strokeWidth="2"/>
+<shape id="accent" shape="rect" x="48" y="48" width="48" height="5" fill="#6BE7CE"/>
+<layer id="h" asset="heading" x="48" y="76"/><layer id="s" asset="sub" x="48" y="144"/>
+<layer id="c" asset="chips" x="48" y="206"/><layer id="f" asset="footer" x="48" y="293"/>
+<shape id="track" shape="rounded-rect" x="48" y="258" width="544" height="5" radius="2.5" fill="#284B65"/>
+<shape id="progress" shape="rounded-rect" x="48" y="258" width="1" height="5" radius="2.5" fill="#6BE7CE"><animate property="width"><key time="0" value="1"/><key time="3" value="544"/></animate></shape>
+</composition></scene>

@@ -1,0 +1,53 @@
+<scene version="1.1">
+  <project width="480" height="270" fps="12" duration="6" background="#0B1220" motionBlurSamples="4" adaptiveMotionBlur="false"/>
+  <metadata title="Efeitos, tempo e cor" description="Demonstração do compositor: efeitos lineares, transições e GLSL."/>
+  <colorManagement workingSpace="acescg" toneMapping="agx" bitDepth="32f"/>
+  <output id="preview" path="preview.mp4" codec="h264" container="mp4" preset="fast" crf="18">
+    <poster path="poster.png" time="3" width="480" format="png"/>
+  </output>
+  <assets>
+    <font id="inter" src="assets/inter.woff2" family="Inter"/>
+    <text id="brand" text="SCENE / RENDER" fontAsset="inter" size="11" color="#74DCC4" width="240" height="20"/>
+    <text id="title1" text="Luz que se move." fontAsset="inter" size="29" weight="700" color="#FFFFFF" width="420" height="44"/>
+    <text id="title2" text="Cor com precisão." fontAsset="inter" size="29" weight="700" color="#FFFFFF" width="420" height="44"/>
+    <text id="title3" text="Seu próprio efeito." fontAsset="inter" size="29" weight="700" color="#FFFFFF" width="420" height="44"/>
+    <text id="sub1" text="Glow · motion blur · composição linear" fontAsset="inter" size="12" color="#B3C6D9" width="400" height="24"/>
+    <text id="sub2" text="ASC CDL · ACEScg · display AgX" fontAsset="inter" size="12" color="#B3C6D9" width="400" height="24"/>
+    <text id="sub3" text="GLSL · uniforms · tempo determinístico" fontAsset="inter" size="12" color="#B3C6D9" width="400" height="24"/>
+    <text id="footer" text="BATCH 04     /     EFEITOS, TRANSIÇÕES E COR" fontAsset="inter" size="9" color="#95A7BC" width="400" height="18"/>
+    <audio id="bed" src="assets/bed.wav" duration="6" channels="2" sampleRate="48000"/>
+  </assets>
+  <composition>
+    <layer id="logo" asset="brand" x="28" y="21"/>
+    <group id="one" start="0" end="2">
+      <layer id="t1" asset="title1" x="28" y="55"/>
+      <layer id="s1" asset="sub1" x="28" y="98"/>
+      <shape id="orbit1" shape="ellipse" x="80" y="146" width="64" height="64" fill="#49DFC0" effects="halo" motionBlur="on">
+        <animate property="x"><key time="0" value="60"/><key time="2" value="350"/></animate>
+      </shape>
+      <shape id="rail" shape="rect" x="28" y="221" width="424" height="1" fill="#344559"/>
+    </group>
+    <group id="two" start="2" end="4">
+      <layer id="t2" asset="title2" x="28" y="55"/>
+      <layer id="s2" asset="sub2" x="28" y="98"/>
+      <shape id="swatch1" shape="rounded-rect" x="28" y="147" width="128" height="67" radius="12" fill="#ED6951"/>
+      <shape id="swatch2" shape="rounded-rect" x="176" y="147" width="128" height="67" radius="12" fill="#ED6951" effects="grade"/>
+      <shape id="swatch3" shape="rounded-rect" x="324" y="147" width="128" height="67" radius="12" fill="#ED6951" effects="cool"/>
+    </group>
+    <group id="three" start="4" end="6">
+      <layer id="t3" asset="title3" x="28" y="55"/>
+      <layer id="s3" asset="sub3" x="28" y="98"/>
+      <shape id="shaderCard" shape="rounded-rect" x="28" y="147" width="424" height="67" radius="12" fill="#AAAAAA" effects="custom"/>
+    </group>
+    <transition from="one" to="two" type="crossfade" duration="0.7" curve="ease-in-out"/>
+    <transition from="two" to="three" type="wipe" duration="0.7" direction="right" softness="0.2"/>
+    <layer id="foot" asset="footer" x="28" y="240"/>
+  </composition>
+  <effects>
+    <effect id="halo" type="glow" radius="16" intensity="0.55" color="#49DFC0"/>
+    <effect id="grade" type="cdl" slope="0.6,1.5,1.2" offset="0,0.03,0.04" power="1,0.8,0.8"/>
+    <effect id="cool" type="hue-saturation" hue="130" saturation="1.1"/>
+    <effect id="custom" type="shader" src="assets/color-wave.glsl"><param name="intensity" value="0.85"/></effect>
+  </effects>
+  <audioMix><master normalize="none"/><audioTrack id="music" asset="bed" start="0" fadeIn="0.3" fadeOut="0.5"/></audioMix>
+</scene>

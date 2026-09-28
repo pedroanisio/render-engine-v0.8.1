@@ -1,0 +1,263 @@
+{
+  "scope": "Renderer 13 compatibility proxy, anchorMode=position. Original strict safe-area acceptance remains rejected; finishing effects intentionally follow XML.",
+  "rendererVersion": "13",
+  "totalFrames": 7012,
+  "fps": 24,
+  "width": 192,
+  "height": 108,
+  "duration": 292.1666666666667,
+  "contiguous": true,
+  "allSegmentsDecoded": true,
+  "sha256ReceiptsVerified": true,
+  "segments": [
+    {
+      "file": "000000-efb1b5aff4fdd42ade27452b.mkv",
+      "firstFrame": 0,
+      "frames": 300,
+      "width": 192,
+      "height": 108,
+      "sha256": "0d964b0b8be4412fc0f2c475ee2983bc2f7854ae36f3a8eaecebfd4c66d23da1"
+    },
+    {
+      "file": "000300-fc0b074b9c2b7f4f18143e9b.mkv",
+      "firstFrame": 300,
+      "frames": 168,
+      "width": 192,
+      "height": 108,
+      "sha256": "77e224a7a0cf1d38da67bc45955ffdf9d634d029920cd722cc7484d51ba03333"
+    },
+    {
+      "file": "000468-9aec404ef25f8d16501d33c8.mkv",
+      "firstFrame": 468,
+      "frames": 188,
+      "width": 192,
+      "height": 108,
+      "sha256": "80b498a499e923edef9854d3bf72737efb523c8b51c8ce4b862c5ac872783bff"
+    },
+    {
+      "file": "000656-7fed9cbe2bcbca24301c8b74.mkv",
+      "firstFrame": 656,
+      "frames": 158,
+      "width": 192,
+      "height": 108,
+      "sha256": "f0d1879a64e90108ddbcddba3d6e804aab2caa353c481ef9fde58ad5dfcdb40e"
+    },
+    {
+      "file": "000814-16116e0c182f44d1308ee2bf.mkv",
+      "firstFrame": 814,
+      "frames": 178,
+      "width": 192,
+      "height": 108,
+      "sha256": "a23e9bc8bceba8792c9ec55f7e7fe5b1f89d5be229356b399c10c3af594d13f5"
+    },
+    {
+      "file": "000992-0189942be413667e61b24983.mkv",
+      "firstFrame": 992,
+      "frames": 242,
+      "width": 192,
+      "height": 108,
+      "sha256": "ca8de3ec548106d387b744c096fa28f46c9c214e5f1324c15520ca1668d40cff"
+    },
+    {
+      "file": "001234-53f177e3340ca9579e9ccdeb.mkv",
+      "firstFrame": 1234,
+      "frames": 242,
+      "width": 192,
+      "height": 108,
+      "sha256": "4c152dc61d552bb79998763743016216124376df4b2ba6a1bd74b0db1121afef"
+    },
+    {
+      "file": "001476-3969ac3a2721f0b5763f7f0d.mkv",
+      "firstFrame": 1476,
+      "frames": 188,
+      "width": 192,
+      "height": 108,
+      "sha256": "c0a1488091e5d3f23c924d3b832cf1041fc8e37c7edd410b0bcd0d0c5d934b39"
+    },
+    {
+      "file": "001664-0b9bece1c77aec0489a7dd3f.mkv",
+      "firstFrame": 1664,
+      "frames": 194,
+      "width": 192,
+      "height": 108,
+      "sha256": "f47a8998e7d71aa46bacf2a41a2a85e0c31acd1e12a077c89027fb2d91ca084c"
+    },
+    {
+      "file": "001858-397a22373d398a8dc4d6a5bc.mkv",
+      "firstFrame": 1858,
+      "frames": 166,
+      "width": 192,
+      "height": 108,
+      "sha256": "7681232a3fd756f0898ff59a16c17189bbe7aae4c9005592c5898304cab42511"
+    },
+    {
+      "file": "002024-f2aedd6ca8819cdce0054e6b.mkv",
+      "firstFrame": 2024,
+      "frames": 248,
+      "width": 192,
+      "height": 108,
+      "sha256": "b24751295580045cd024d037e4f9f72cf1972a452c6fd91259690fc4d0b3cf1b"
+    },
+    {
+      "file": "002272-d379a4a4f50c08a23882c177.mkv",
+      "firstFrame": 2272,
+      "frames": 266,
+      "width": 192,
+      "height": 108,
+      "sha256": "6d18ec7e8c11568f88c5057edfbb6c49976969016114a12d6cfe6b0516f7fc1a"
+    },
+    {
+      "file": "002538-321dca7f90d8b6a2926af3d2.mkv",
+      "firstFrame": 2538,
+      "frames": 204,
+      "width": 192,
+      "height": 108,
+      "sha256": "d9a237fc0970796f46e2fd65946d63fb2096c9578cb691475624e476792c7c97"
+    },
+    {
+      "file": "002742-e30ab084d77abba795cf0432.mkv",
+      "firstFrame": 2742,
+      "frames": 232,
+      "width": 192,
+      "height": 108,
+      "sha256": "4ed62a9201ef1b1d5ebbcc0cffe59413a427b1ada57c37382d4e7dc73f49aa31"
+    },
+    {
+      "file": "002974-eedc4152cea7ce14fbe67f1a.mkv",
+      "firstFrame": 2974,
+      "frames": 118,
+      "width": 192,
+      "height": 108,
+      "sha256": "c6722d56d55e7c779ecc3510c7eb7b06e1abf21c63e00292a2b462539cd395f7"
+    },
+    {
+      "file": "003092-b7344a0ca17f513d316d4475.mkv",
+      "firstFrame": 3092,
+      "frames": 156,
+      "width": 192,
+      "height": 108,
+      "sha256": "a9ade7bd8757f6e2f51064073aa3b1e4d204278277568e5cf9cd87156f510789"
+    },
+    {
+      "file": "003248-2d00ef3f88c2a5a43e438eab.mkv",
+      "firstFrame": 3248,
+      "frames": 166,
+      "width": 192,
+      "height": 108,
+      "sha256": "05842579694cdf601f531f52d2d4b8c50dda1d06b745ec3f4444251a157d6b5d"
+    },
+    {
+      "file": "003414-69ac1bfabc3868787475f9d2.mkv",
+      "firstFrame": 3414,
+      "frames": 216,
+      "width": 192,
+      "height": 108,
+      "sha256": "f518f4859df616d4d804ccb7ddbb15d650fa1cab2c8175183849ed6212a8f526"
+    },
+    {
+      "file": "003630-ac8cbfe0c569e1d34722b702.mkv",
+      "firstFrame": 3630,
+      "frames": 168,
+      "width": 192,
+      "height": 108,
+      "sha256": "fbb10051d789b9c48e99437f264d28aa7870bfefe325c165bf674bf86ea873db"
+    },
+    {
+      "file": "003798-3e143d60802f29654de30da9.mkv",
+      "firstFrame": 3798,
+      "frames": 130,
+      "width": 192,
+      "height": 108,
+      "sha256": "f79409cb239da50b1636ccd36f7de412d73af8a3c784957f9b00d43a73f4e68c"
+    },
+    {
+      "file": "003928-0ca9a77a36baf20e1ee94a0e.mkv",
+      "firstFrame": 3928,
+      "frames": 926,
+      "width": 192,
+      "height": 108,
+      "sha256": "fbb3c14f8b77739aa5c2e9a559233196c72c0996cd3b4b679b88d283d0d3d6f2"
+    },
+    {
+      "file": "004854-3ced74047ce866b55423d4a5.mkv",
+      "firstFrame": 4854,
+      "frames": 176,
+      "width": 192,
+      "height": 108,
+      "sha256": "e27d4ecb9a772776fc1144269eb5484ad5a4d4ffe7df59ef1828e92025e7e103"
+    },
+    {
+      "file": "005030-b8dbcfc80af5003b0253fa63.mkv",
+      "firstFrame": 5030,
+      "frames": 160,
+      "width": 192,
+      "height": 108,
+      "sha256": "cd7a0f23ad30166534bedf6d23add06b22f8df4b309e29f89bb2c2f37c62dca3"
+    },
+    {
+      "file": "005190-d10cc556f702a2e5419007b7.mkv",
+      "firstFrame": 5190,
+      "frames": 312,
+      "width": 192,
+      "height": 108,
+      "sha256": "6944f8343e32b0e2dad96f68c2bc286f040e4ba1f488f9fd832eb80c74fbc40b"
+    },
+    {
+      "file": "005502-ff7b70516a851211d5634758.mkv",
+      "firstFrame": 5502,
+      "frames": 188,
+      "width": 192,
+      "height": 108,
+      "sha256": "eb05d4877ecb1147c3361a167cabcce4a103fea35247ecb28ffc4cd479df4f41"
+    },
+    {
+      "file": "005690-6ecb4a04d54e48df3a01c4d5.mkv",
+      "firstFrame": 5690,
+      "frames": 264,
+      "width": 192,
+      "height": 108,
+      "sha256": "b7fbe09c300afc493c7fbc7d451324eb62ec7c004a3c8da234824dcd1ba66196"
+    },
+    {
+      "file": "005954-12e4b59b00d27afd541ccb95.mkv",
+      "firstFrame": 5954,
+      "frames": 256,
+      "width": 192,
+      "height": 108,
+      "sha256": "5c670700e1f0dcdadb0acd9bc7922a239281ce007ce8666e0d03d689440696b7"
+    },
+    {
+      "file": "006210-bf4c8e54d263e41beb9a5f1c.mkv",
+      "firstFrame": 6210,
+      "frames": 156,
+      "width": 192,
+      "height": 108,
+      "sha256": "c471734f39f1ca5045971b06e84a0076399d03964663a639ea3c90ae0d68a557"
+    },
+    {
+      "file": "006366-0d959dd1c7805d5556933621.mkv",
+      "firstFrame": 6366,
+      "frames": 244,
+      "width": 192,
+      "height": 108,
+      "sha256": "a9c5df298869ac9d7f51e9aa33275b325553cbae08a58b481f216d5b1e96cbb7"
+    },
+    {
+      "file": "006610-735ccf0d5b4fa61218e28973.mkv",
+      "firstFrame": 6610,
+      "frames": 186,
+      "width": 192,
+      "height": 108,
+      "sha256": "3e390542f987bb0d187bdd924b9a513937d08c5298d5556029f361d5bb222b7c"
+    },
+    {
+      "file": "006796-3f5128c3d8f96627ede2dac5.mkv",
+      "firstFrame": 6796,
+      "frames": 216,
+      "width": 192,
+      "height": 108,
+      "sha256": "40384de48e94d55969f67bb92f47baf33b821394945f2c9e9abe2bd6f708b116"
+    }
+  ],
+  "anchorMode": "position"
+}

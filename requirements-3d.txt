@@ -1,0 +1,4 @@
+# Dedicated Python 3.11 environment; separate from the media backend.
+bpy==4.5.0
+numpy==1.26.4
+MaterialX==1.39.4

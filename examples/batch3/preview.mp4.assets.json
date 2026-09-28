@@ -1,0 +1,72 @@
+{
+  "renderer": "5",
+  "assets": [
+    {
+      "id": "inter",
+      "kind": "font",
+      "license": "OFL-1.1",
+      "source": "assets/inter.woff2",
+      "files": [
+        {
+          "src": "assets/inter.woff2",
+          "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+        }
+      ]
+    },
+    {
+      "id": "backdrop",
+      "kind": "generator",
+      "files": []
+    },
+    {
+      "id": "eyebrow",
+      "kind": "text",
+      "files": [
+        {
+          "src": "assets/inter.woff2",
+          "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+        }
+      ]
+    },
+    {
+      "id": "title",
+      "kind": "text",
+      "files": [
+        {
+          "src": "assets/inter.woff2",
+          "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+        }
+      ]
+    },
+    {
+      "id": "subtitle",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "chart",
+      "kind": "chart",
+      "files": [
+        {
+          "src": "system-font:/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+          "sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280"
+        }
+      ]
+    },
+    {
+      "id": "formula",
+      "kind": "formula",
+      "files": []
+    },
+    {
+      "id": "qr",
+      "kind": "code",
+      "files": []
+    },
+    {
+      "id": "footer",
+      "kind": "text",
+      "files": []
+    }
+  ]
+}

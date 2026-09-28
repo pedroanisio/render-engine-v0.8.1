@@ -1,0 +1,61 @@
+{
+  "renderer": "8",
+  "native": {
+    "Blender": "4.5.0",
+    "MaterialX": "1.39.4",
+    "engine": "Cycles CPU"
+  },
+  "assets": [
+    {
+      "id": "inter",
+      "kind": "font",
+      "source": "assets/inter.woff2",
+      "files": [
+        {
+          "src": "assets/inter.woff2",
+          "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+        }
+      ]
+    },
+    {
+      "id": "title",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "subtitle",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "label1",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "label2",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "label3",
+      "kind": "text",
+      "files": []
+    },
+    {
+      "id": "footer",
+      "kind": "text",
+      "files": []
+    }
+  ],
+  "effectResources": [
+    {
+      "src": "assets/satin.mtlx",
+      "sha256": "c408ff1aea57711a171301378b3baffc849e3297827f24c6c2d3ad008fa00dfb"
+    },
+    {
+      "src": "assets/physics.json",
+      "sha256": "cbf946e9cda3be13d8869762d99b22b11f55d2815c70e08c87b6efb072dd79e2"
+    }
+  ]
+}

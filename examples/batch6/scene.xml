@@ -1,0 +1,56 @@
+<scene version="1.1">
+  <project width="640" height="360" fps="12" duration="8" background="#0B1220"/>
+  <metadata title="Batch 6 — Audio, captions and accessibility">
+    <accessibility description="Demonstração de áudio sintetizado, ducking e legendas temporizadas." requireCaptions="true" flashCheck="error" contrastCheck="warn" minContrast="4.5"/>
+  </metadata>
+  <styles>
+    <textStyle id="base" fontAsset="inter" color="#EEF5FF"/>
+    <textStyle id="heading" basedOn="base" variation="wght=720"/>
+    <textStyle id="muted" basedOn="base" color="#ADBCD4"/>
+    <textStyle id="captionStyle" basedOn="base" size="22"/>
+    <textStyle id="active" basedOn="captionStyle" color="#73F5CD"/>
+  </styles>
+  <output id="main" path="preview.mp4" codec="h264" container="mp4" width="640" height="360" fps="12" preset="fast" crf="18" captions="cc">
+    <poster time="2.6" path="poster.png" width="640" format="png"/>
+  </output>
+  <safeAreas><safeArea id="safe" preset="title-safe"/></safeAreas>
+  <assets>
+    <font id="inter" src="assets/inter.woff2" family="Inter"/>
+    <audio id="music" src="assets/music.wav" bpm="120"/>
+    <audio id="lead" src="assets/lead.wav"/>
+    <audiogram id="wave" source="lead" width="544" height="70" style="wave" color="#73F5CD" smoothing=".2"/>
+    <text id="eyebrow" text="SCENE RENDER / BATCH 06" width="550" height="22" size="12" tracking="110" style="muted"/>
+    <text id="title" text="Áudio, no tempo certo." width="560" height="66" size="40" style="heading"/>
+    <text id="sub" text="Mixagem · palavras temporizadas · acessibilidade" width="560" height="30" size="16" style="muted"/>
+    <text id="label" text="SINAL DE REFERÊNCIA  /  DUCKING POR NÍVEL" width="550" height="20" size="11" tracking="40" style="muted"/>
+    <text id="footer" text="44.1 kHz   •   Stereo   •   −16 LUFS   •   −1 dBTP" width="560" height="24" size="12" style="muted"/>
+  </assets>
+  <composition>
+    <shape id="accent" shape="rect" x="32" y="32" width="3" height="88" fill="#73F5CD"/>
+    <layer id="eyebrowLayer" asset="eyebrow" x="48" y="29"/>
+    <layer id="titleLayer" asset="title" x="45" y="60"/>
+    <layer id="subLayer" asset="sub" x="48" y="118"/>
+    <shape id="panel" shape="rect" x="32" y="162" width="576" height="106" radius="14" fill="#111F34"/>
+    <layer id="waveLayer" asset="wave" x="48" y="179"/>
+    <layer id="labelLayer" asset="label" x="48" y="247"/>
+    <shape id="progressBack" shape="rect" x="32" y="342" width="576" height="2" fill="#2B3C54"/>
+    <shape id="progress" shape="rect" x="32" y="342" width="1" height="2" fill="#73F5CD"><animate property="width"><key time="0" value="1"/><key time="8" value="576"/></animate></shape>
+    <layer id="footerLayer" asset="footer" x="48" y="313"/>
+  </composition>
+  <audioMix sampleRate="44100" channels="2" channelLayout="stereo" bitDepth="24">
+    <bus id="speech" output="program"><audioEffect type="compressor" threshold="-20" ratio="3" attack=".005" release=".12"/></bus>
+    <bus id="musicBus" output="program" duckUnder="speech" duckThreshold="-36" duckAmount="-15" duckAttack=".025" duckRelease=".22"/>
+    <bus id="program"><audioEffect type="eq"><band kind="highpass" frequency="80"/><band kind="peak" frequency="1000" gain="1.5" q=".8"/></audioEffect></bus>
+    <master normalize="integrated" loudness="-16" truePeak="-1" limiter="true" dither="true"/>
+    <audioTrack id="bed" asset="music" bus="musicBus" fitToDuration="true" gain="-5" fadeIn=".3" fadeOut=".4" fadeCurve="equal-power"/>
+    <audioTrack id="signal" asset="lead" bus="speech" role="effects"><audioEffect type="delay" time=".14" feedback=".2" mix=".08"/></audioTrack>
+  </audioMix>
+  <captions>
+    <captionTrack id="cc" language="pt-BR" label="Português" mode="both" preset="highlight" style="captionStyle" activeStyle="active" activeColor="#73F5CD" x="50%" y="81%" width="88%" safeArea="safe" maxCharsPerLine="48" maxLines="1">
+      <cue start="0" end="2" text="Cada amostra, no lugar certo."><word start="0" end=".5" text="Cada"/><word start=".5" end="1" text="amostra,"/><word start="1" end="1.2" text="no"/><word start="1.2" end="1.6" text="lugar"/><word start="1.6" end="2" text="certo."/></cue>
+      <cue start="2" end="4" text="A música acompanha o sinal."/>
+      <cue start="4" end="6" text="Legendas dentro e fora do vídeo."/>
+      <cue start="6" end="8" text="Mixagem e acessibilidade verificadas."/>
+    </captionTrack>
+  </captions>
+</scene>

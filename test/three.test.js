@@ -32,7 +32,8 @@ const pixel = (s, x = 4, y = 4) =>
 const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 const mesh = {
   rootnode: { transformation: identity, meshes: [0] },
-  meshes: [{ vertices: [-1, -1, 0, 0, 1, 0, 1, -1, 0], faces: [[0, 1, 2]] }],
+  // counter-clockwise in Y-up: the +z face looks at the implicit camera (CONVENTIONS 2.6)
+  meshes: [{ vertices: [-1, -1, 0, 0, 1, 0, 1, -1, 0], faces: [[0, 2, 1]] }],
 };
 const material = (id = "red", extra = "") =>
   `<material id="${id}" unlit="true" baseColor="#FF0000" ${extra}/>`;
@@ -160,14 +161,17 @@ test("geometry input errors and static hierarchy conversion", () => {
     /segments/,
   );
   assert.throws(() => primitive({ primitive: "extrude" }), /unsupported/);
-  const imported = importedGeometry(mesh);
+  const imported = importedGeometry(mesh, 1);
   assert.equal(imported.points.length, 3);
-  assert.deepEqual(imported.triangles, [[0, 1, 2]]);
+  // CONVENTIONS 2.6: Y-up metres enter scene space as (100x, -100y, -100z)
+  close(importedGeometry(mesh).points[1][1], -100);
+  close(importedGeometry(mesh).points[2][0], 100);
+  assert.deepEqual(imported.triangles, [[0, 2, 1]]);
   const tree = structuredClone(mesh);
   tree.rootnode.children = [
     { transformation: identity.map((v, i) => (i === 3 ? 3 : v)), meshes: [0] },
   ];
-  assert.equal(importedGeometry(tree).points[3][0], 2);
+  assert.equal(importedGeometry(tree, 1).points[3][0], 2);
   const usd = {
     format: "usd",
     meshes: [
@@ -188,7 +192,7 @@ test("geometry input errors and static hierarchy conversion", () => {
       },
     ],
   };
-  assert.equal(importedGeometry(usd).points[0][0], 1);
+  assert.equal(importedGeometry(usd, 1).points[0][0], 1);
   for (const v of [null, { format: "splat" }, {}])
     assert.throws(() => importedGeometry(v));
   const bad = structuredClone(mesh);
@@ -201,19 +205,19 @@ test("geometry input errors and static hierarchy conversion", () => {
   assert.throws(() => importedGeometry(bad), /non-finite/);
 });
 test("scene geometry, camera selection and temporal visibility", () => {
-  const base = renderer(xml(object()));
+  const base = renderer(xml(object('x="16" y="16"')));
   assert.equal(pixel(base.render(0), 16, 16)[0], 1);
-  const hidden = renderer(xml(object('start="1" end="2"')));
+  const hidden = renderer(xml(object('x="16" y="16" start="1" end="2"')));
   assert.equal(pixel(hidden.render(0), 16, 16)[3], 0);
   assert.equal(pixel(hidden.render(1), 16, 16)[3], 1);
   assert.equal(pixel(hidden.render(2), 16, 16)[3], 0);
-  const camera = `<camera id="cam" z="-30" projection="orthographic" orthoHeight="32"/><camera id="cam2" start="2" z="-30" x="30"/>`;
-  const r = renderer(xml(object() + camera));
+  const camera = `<camera id="cam" x="16" y="16" z="-30" projection="orthographic" orthoHeight="32"/><camera id="cam2" start="2" z="-30" x="46" y="16"/>`;
+  const r = renderer(xml(object('x="16" y="16"') + camera));
   assert.equal(pixel(r.render(0), 16, 16)[0], 1);
   assert.equal(pixel(r.render(2), 16, 16)[3], 0);
   const focal = renderer(
     xml(
-      object() + '<camera id="cam" z="-30" focalLength="36" sensorWidth="36"/>',
+      object('x="16" y="16"') + '<camera id="cam" x="16" y="16" z="-30" focalLength="36" sensorWidth="36"/>',
     ),
   );
   assert.equal(pixel(focal.render(0), 16, 16)[0], 1);
@@ -239,26 +243,27 @@ test("camera target, parent transforms, animation and reordered seeking", () => 
 test("alpha mask, object opacity, emissive exposure and static imported mesh cache", () => {
   const mask = renderer(
     xml(
-      object(),
+      object('x="16" y="16"'),
       '<material id="red" unlit="true" baseColor="#FF000040" alphaMode="mask"/>',
     ),
   );
   assert.equal(pixel(mask.render(0), 16, 16)[3], 0);
   const alpha = renderer(
-    xml(object('opacity="0.5"'), material("red", 'alphaMode="mask"')),
+    xml(object('x="16" y="16" opacity="0.5"'), material("red", 'alphaMode="mask"')),
   );
   close(pixel(alpha.render(0), 16, 16)[3], 0.5);
   const emission = renderer(
     xml(
-      object() + '<camera id="cam" z="-30" exposure="1"/>',
+      object('x="16" y="16"') + '<camera id="cam" x="16" y="16" z="-30" exposure="1"/>',
       material("red", 'emissive="#00FF00"'),
     ),
   );
   assert.deepEqual(pixel(emission.render(0), 16, 16), [2, 2, 0, 1]);
   const source = xml(
-    object().replace(
+    object('x="16" y="16"').replace(
       'primitive="box"',
-      'primitive="mesh" mesh="mesh" scaleX="10" scaleY="10"',
+      // the ±1 m mesh is 200 px at 100 px/m; 0.1 keeps its former 20 px
+      'primitive="mesh" mesh="mesh" scaleX="0.1" scaleY="0.1" scaleZ="0.1"',
     ),
     material(),
     "",
@@ -347,10 +352,10 @@ test("real imported OBJ renders through encoder, resumes, and invalidates on geo
   const { renderEpisode } = await import("../src/render/pipeline.js");
   const dir = mkdtempSync(join(tmpdir(), "geometry-render-"));
   try {
-    const obj = "v -10 -10 0\nv 0 10 0\nv 10 -10 0\nf 1 2 3\n";
+    const obj = "v -10 -10 0\nv 0 10 0\nv 10 -10 0\nf 1 3 2\n"; // counter-clockwise: faces the camera
     writeFileSync(join(dir, "mesh.obj"), obj);
     const source = xml(
-      object().replace('primitive="box"', 'primitive="mesh" mesh="mesh"'),
+      object('x="16" y="16" scaleX="0.01" scaleY="0.01" scaleZ="0.01"').replace('primitive="box"', 'primitive="mesh" mesh="mesh"'),
       material(),
       "",
       '<assets><mesh id="mesh" src="mesh.obj"/></assets>',
@@ -390,7 +395,7 @@ test("real imported OBJ renders through encoder, resumes, and invalidates on geo
 test("object3D matte isolates its projected silhouette and hides it from the main pass", () => {
   const r = renderer(
     xml(
-      object() +
+      object('x="16" y="16"') +
         '<shape id="s" shape="rect" width="32" height="32" fill="#00FF00" matte="o"/>',
     ),
   );

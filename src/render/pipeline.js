@@ -1210,7 +1210,7 @@ with zipfile.ZipFile(sys.argv[2],'w',compression=zipfile.ZIP_DEFLATED) as z:
       await deliver(destination, deliveryFile, base, o.signal);
     return { video, captions, posters, rendered, cached };
   } finally {
-    pool?.close();
+    await pool?.close();
     if (releaseRenderGpu) await releaseGpu();
     releaseLock();
     media.close();

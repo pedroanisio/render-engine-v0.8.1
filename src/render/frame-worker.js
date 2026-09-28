@@ -79,6 +79,8 @@ try {
     } else if (m.type === "clear") renderer.cache.clear();
     else if (m.type === "close") {
       media.close();
+      // An open device keeps this thread alive (and must not be torn down by terminate).
+      gpu?.device.destroy();
       port.close();
     }
   });

@@ -222,10 +222,26 @@ export class FramePool {
   clear() {
     for (const worker of this.workers) worker.postMessage({ type: "clear" });
   }
-  close() {
+  /** Asks each worker to release its media and GPU device and exit; a worker
+   * that has not exited within ten seconds (or is mid-frame) is terminated.
+   * Terminating a thread whose WebGPU device is open aborts the process. */
+  async close() {
     this.closed = true;
-    for (const worker of this.workers) void worker.terminate();
+    const workers = this.workers;
     this.workers = [];
     this.idle = [];
+    await Promise.all(
+      workers.map(
+        (worker) =>
+          new Promise((resolve) => {
+            const timer = setTimeout(() => void worker.terminate(), 10000);
+            worker.once("exit", () => {
+              clearTimeout(timer);
+              resolve(undefined);
+            });
+            worker.postMessage({ type: "close" });
+          }),
+      ),
+    );
   }
 }

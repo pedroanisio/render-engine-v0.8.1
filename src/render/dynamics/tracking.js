@@ -120,16 +120,21 @@ export function parseTracking(text, format, fps) {
     throw new Error("duplicate tracking timestamp");
   return keys;
 }
-/** @param {any} a @param {any} b @param {number} q @returns {any} */
-function interpolate(a, b, q) {
-  if (typeof a === "number" && typeof b === "number") return a + (b - a) * q;
+/** @param {any} a @param {any} b @param {number} q @param {string} [key] @returns {any} */
+function interpolate(a, b, q, key = "") {
+  if (typeof a === "number" && typeof b === "number") {
+    // Tracked samples are dense; a rotation jump across ±180° is the short way round.
+    const d =
+      key === "rotation" ? ((((b - a + 180) % 360) + 360) % 360) - 180 : b - a;
+    return a + d * q;
+  }
   if (Array.isArray(a) && Array.isArray(b))
     return a.map((v, i) => interpolate(v, b[i], q));
   if (a && b && typeof a === "object" && typeof b === "object")
     return Object.fromEntries(
       [...new Set([...Object.keys(a), ...Object.keys(b)])].map((k) => [
         k,
-        interpolate(a[k] ?? b[k], b[k] ?? a[k], q),
+        interpolate(a[k] ?? b[k], b[k] ?? a[k], q, k),
       ]),
     );
   return q < 1 ? a : b;
@@ -202,7 +207,7 @@ export class Tracking {
     const t = time + Number(track.node.attributes.timeOffset ?? 0),
       raw = sampleTracking(track.keys, t);
     /** @type {Record<string,number>} */ const result = {};
-    for (const key of ["x", "y", "rotation", "scaleX", "scaleY"]) {
+    for (const key of ["x", "y", "scaleX", "scaleY"]) {
       let sum = 0;
       for (let i = -8; i <= 8; i++)
         sum += Number(
@@ -215,6 +220,18 @@ export class Tracking {
         ? average / (value || 1)
         : average - value;
     }
+    // Rotation is circular: average the offsets from the current angle, each
+    // wrapped to (-180, 180], so a track crossing +/-180 does not average to 0.
+    const rotation = Number(raw.rotation ?? 0);
+    let turn = 0;
+    for (let i = -8; i <= 8; i++) {
+      const d =
+        Number(
+          sampleTracking(track.keys, t + (i / 8) * smoothing).rotation ?? 0,
+        ) - rotation;
+      turn += d - 360 * Math.round(d / 360);
+    }
+    result.rotation = turn / 17;
     return result;
   }
 }

@@ -5,7 +5,7 @@ import { capabilityManifest } from "./scene/preflight.js";
  */
 import { createAudioAnalysis } from "./render/audio-analysis.js";
 import { createHash } from "node:crypto";
-import { posix } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileDependencies, inspect } from "./assets.js";
 import { loadScene, prepareScene } from "./index.js";
 
@@ -129,10 +129,52 @@ export function parseRenderArgs(args) {
  * @property {(path: string) => Uint8Array} readBytes
  * @property {(s: string) => void} stdout
  * @property {(s: string) => void} stderr
+ * @property {(path: string) => string} [realpath] canonical path (symlinks
+ *   resolved); when present, scene-relative reads are also checked for
+ *   symlink escapes, not only lexically.
  */
 
 /** @typedef {import('./diagnostics.js').Diagnostic} Diagnostic */
 /** @typedef {'ok' | 'missing' | 'invalid' | 'outside' | 'unchecked'} Status */
+
+/** @param {string} rel */
+const escapes = (rel) =>
+  rel === ".." || rel.startsWith(`..${sep}`) || rel.startsWith("../") || isAbsolute(rel);
+
+/**
+ * Resolves `uri` against the scene directory, refusing remote/absolute URIs
+ * and anything that leaves the directory lexically or through a symlink.
+ * @param {Io} io @param {string} dir @param {string} uri
+ * @returns {{ ok: true, path: string } | { ok: false, remote: boolean, reason: string }}
+ */
+export function containedPath(io, dir, uri) {
+  if (!uri || /^[a-z][a-z0-9+.-]*:/i.test(uri) || isAbsolute(uri) || uri.startsWith("/"))
+    return { ok: false, remote: true, reason: "remote or absolute URI" };
+  const path = join(dir, uri);
+  if (escapes(relative(resolve(dir), resolve(path))))
+    return { ok: false, remote: false, reason: "resolves outside the scene directory" };
+  if (io.realpath) {
+    let root, real;
+    try {
+      root = io.realpath(dir || ".");
+      for (let probe = path; ; ) {
+        try {
+          real = io.realpath(probe);
+          break;
+        } catch (e) {
+          const up = dirname(probe);
+          if (/** @type {{ code?: string }} */ (e).code !== "ENOENT" || up === probe) throw e;
+          probe = up;
+        }
+      }
+    } catch (e) {
+      return { ok: false, remote: false, reason: `cannot resolve: ${message(e)}` };
+    }
+    if (escapes(relative(root, real)))
+      return { ok: false, remote: false, reason: "resolves outside the scene directory through a symlink" };
+  }
+  return { ok: true, path };
+}
 
 /** @param {unknown} e */
 const message = (e) => (e instanceof Error ? e.message : String(e));
@@ -172,9 +214,13 @@ export function main(argv, io) {
     const loaded = loadScene(source);
     const r = prepareScene(source, {
       audioAmplitude: loaded.ok
-        ? createAudioAnalysis(loaded.scene, posix.dirname(file))
+        ? createAudioAnalysis(loaded.scene, dirname(file))
         : undefined,
-      read: (p) => io.readFile(posix.join(posix.dirname(file), p)),
+      read: (p) => {
+        const c = containedPath(io, dirname(file), p);
+        if (!c.ok) throw new Error(`cannot read ${p}: ${c.reason}`);
+        return io.readFile(c.path);
+      },
     });
     if (json)
       io.stdout(
@@ -213,23 +259,22 @@ function printDiagnostics(io, file, diagnostics) {
  * @returns {0 | 1}
  */
 function assets(io, sceneFile, scene, json) {
-  const dir = posix.dirname(sceneFile);
+  const dir = dirname(sceneFile);
   const results = fileDependencies(scene).map((dep) => {
     /** @type {{ status: Status, problems: string[], file: string | null, sha256?: string, sniffed?: unknown }} */
     const base = { status: "unchecked", problems: [], file: null };
     if (dep.pattern) return { ...dep, ...base, problems: ["sequence pattern"] };
-    if (/^[a-z][a-z0-9+.-]*:/i.test(dep.uri) || dep.uri.startsWith("/")) {
-      return { ...dep, ...base, problems: ["remote or absolute URI"] };
-    }
-    const resolved = posix.join(dir, dep.uri);
-    if (posix.relative(dir, resolved).startsWith("..")) {
+    const c = containedPath(io, dir, dep.uri);
+    if (!c.ok && c.remote) return { ...dep, ...base, problems: [c.reason] };
+    if (!c.ok) {
       return {
         ...dep,
         ...base,
         status: /** @type {Status} */ ("outside"),
-        problems: ["resolves outside the scene directory; not read"],
+        problems: [`${c.reason}; not read`],
       };
     }
+    const resolved = c.path;
     let bytes;
     try {
       bytes = io.readBytes(resolved);

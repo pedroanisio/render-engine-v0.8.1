@@ -15,8 +15,16 @@ const request = JSON.parse(readFileSync(file, "utf8"), (_k, v) =>
 );
 const { scene, base, work, duration, parameters, tracks, output, start, end } =
   request;
+/** @type {Record<string,string>} */
+const reads = request.reads ?? {};
 const runtime = compileRuntime(scene, {
   parameters,
+  // Data sources were read (and hashed) by the parent; the worker never reads files.
+  read: (/** @type {string} */ path) => {
+    if (!Object.hasOwn(reads, path))
+      throw new Error(`audio worker has no data for ${path}`);
+    return String(reads[path]);
+  },
   audioAmplitude: createAudioAnalysis(scene, base),
 });
 const assets = new Map(

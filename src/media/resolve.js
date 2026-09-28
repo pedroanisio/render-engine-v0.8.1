@@ -6,6 +6,11 @@ import {
   mkdirSync,
   renameSync,
   rmSync,
+  openSync,
+  closeSync,
+  fstatSync,
+  readSync,
+  statSync,
 } from 'node:fs';
 import { resolve, relative, isAbsolute, dirname } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -39,6 +44,54 @@ export function assetPath(base, uri, missing = false) {
 }
 /** @param {Uint8Array} bytes */ export const digest = (bytes) =>
   createHash('sha256').update(bytes).digest('hex');
+/** Identity of the file behind a path: any replacement, rename or write
+ * changes the inode, size, mtime or ctime. @param {import('node:fs').Stats} st */
+const identityOf = (st) =>
+  `${st.dev}:${st.ino}:${st.size}:${st.mtimeMs}:${st.ctimeMs}`;
+/** Hash a file through one descriptor, in bounded chunks, and capture its
+ * identity. `keep` also returns the hashed bytes (for single-read decoders).
+ * @param {string} path @param {boolean} [keep] */
+export function fingerprint(path, keep = false) {
+  const fd = openSync(path, 'r');
+  try {
+    const before = fstatSync(fd),
+      hash = createHash('sha256'),
+      /** @type {Buffer[]} */ chunks = [];
+    let total = 0;
+    for (;;) {
+      const chunk = Buffer.allocUnsafe(
+          keep ? Math.max(1, before.size - total) : 1 << 20,
+        ),
+        n = readSync(fd, chunk, 0, chunk.length, null);
+      if (!n) break;
+      hash.update(chunk.subarray(0, n));
+      if (keep) chunks.push(chunk.subarray(0, n));
+      total += n;
+    }
+    const identity = identityOf(before);
+    if (total !== before.size || identityOf(fstatSync(fd)) !== identity)
+      throw new Error(`asset changed while hashing: ${path}`);
+    return {
+      sha256: hash.digest('hex'),
+      identity,
+      bytes: keep
+        ? chunks.length === 1
+          ? /** @type {Buffer} */ (chunks[0])
+          : Buffer.concat(chunks, total)
+        : undefined,
+    };
+  } finally {
+    closeSync(fd);
+  }
+}
+/** Re-check containment and identity of an asset at use time; returns its path.
+ * @param {string} base @param {string} uri @param {string} identity */
+export function verifiedPath(base, uri, identity) {
+  const path = assetPath(base, uri);
+  if (identityOf(statSync(path)) !== identity)
+    throw new Error(`asset changed after verification: ${uri}`);
+  return path;
+}
 /** @param {string} pattern @param {number} frame */
 export function sequencePath(pattern, frame) {
   let count = 0;

@@ -46,7 +46,7 @@ export function audioAutomation(runtime, directory) {
       !node.children.some(
         (n) =>
           ['animate', 'expression', 'link'].includes(n.name) &&
-          ['gain', 'volume', 'pan'].includes(String(n.attributes.property)),
+          ['gain', 'volume', 'pan', 'mute'].includes(String(n.attributes.property)),
       )
     )
       return undefined;
@@ -55,8 +55,8 @@ export function audioAutomation(runtime, directory) {
         gain =
           10 ** (Number(runtime.value(node, 'gain', time) ?? 0) / 20) *
           Number(runtime.value(node, 'volume', time) ?? 1) *
-          (node.attributes.mute === true ? 0 : 1),
-        pan = Number(runtime.value(node, 'pan', time) ?? 0),
+          (runtime.value(node, 'mute', time) === true ? 0 : 1),
+        pan = Math.min(1, Math.max(-1, Number(runtime.value(node, 'pan', time) ?? 0))),
         theta = ((pan + 1) * Math.PI) / 4;
       return [gain * Math.cos(theta) * Math.SQRT2, gain * Math.sin(theta) * Math.SQRT2];
     });

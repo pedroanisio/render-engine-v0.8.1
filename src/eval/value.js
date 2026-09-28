@@ -3,9 +3,17 @@ import { createSimpleTypes } from '../xsd/simple.js';
 import { parseColor } from '../render/color.js';
 export const simple = createSimpleTypes(MODEL.simpleTypes);
 /** @typedef {import('../xsd/typed-value.js').TypedValue} Value */
+/** Own-property lookup of a declared attribute (user names never reach Object.prototype).
+ * @param {string} typeName @param {string} prop */
+export function declaredAttribute(typeName, prop) {
+  const attributes = Object.hasOwn(MODEL.complexTypes, typeName)
+    ? MODEL.complexTypes[typeName]?.attributes
+    : undefined;
+  return attributes && Object.hasOwn(attributes, prop) ? attributes[prop] : undefined;
+}
 /** @param {import('../xsd/validate.js').ValidNode} node @param {string} prop @param {string} raw */
 export function propertyValue(node, prop, raw) {
-  const type = MODEL.complexTypes[node.type]?.attributes[prop]?.type;
+  const type = declaredAttribute(node.type, prop)?.type;
   if (!type && node.name === 'motionPath' && prop === 'progress') return Number(raw);
   if (!type) throw new Error(`<${node.name}> has no attribute "${prop}" to animate`);
   const r = simple.check(type, raw);

@@ -3,6 +3,7 @@ import { AudioStems } from "./audio-stems.js";
 import { execFileSync, spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { inputOptions } from "../media/decode.js";
 import {
   clamp,
   db,
@@ -237,6 +238,7 @@ export function mixAudio(scene, assetOf, duration, runtime, stemDirectory) {
             "stream=channels",
             "-of",
             "json",
+            ...inputOptions(),
             asset.path,
           ],
           { encoding: "utf8" },
@@ -247,6 +249,31 @@ export function mixAudio(scene, assetOf, duration, runtime, stemDirectory) {
         throw new Error(
           "ambisonic assets must already use the requested ACN/SN3D channel count",
         );
+      const start =
+          Number(a.start ?? 0) +
+          (a.startMarker && runtime
+            ? runtime.timeline.marker(a.startMarker)
+            : 0),
+        clipIn = Number(a.clipIn ?? 0),
+        speed = Number(a.speed ?? 1);
+      if (
+        !Number.isFinite(clipIn + start + speed) ||
+        clipIn < 0 ||
+        (a.clipOut !== undefined &&
+          !(
+            Number(a.clipOut) > clipIn && Number.isFinite(Number(a.clipOut))
+          )) ||
+        speed === 0
+      )
+        throw new Error(`invalid audio trim/speed for ${id}`);
+      // Trim in FFmpeg on output-rate sample indices so only the clip crosses the
+      // pipe. The explicit aresample+aformat is the same single conversion that
+      // -ar/-ac would auto-insert, so the retained samples are bit-identical.
+      const first = Math.round(clipIn * rate),
+        last =
+          a.clipOut === undefined
+            ? undefined
+            : Math.round(Number(a.clipOut) * rate);
       const filters = [
         ...(asset.timelineAudio
           ? [`aresample=${rate}:async=1:first_pts=0`]
@@ -254,49 +281,40 @@ export function mixAudio(scene, assetOf, duration, runtime, stemDirectory) {
         ...(inputChannels === 1 && channels === 2
           ? ["pan=stereo|c0=c0|c1=c0"]
           : []),
+        `aresample=${rate}`,
+        `aformat=sample_fmts=flt:channel_layouts=${channels}c`,
+        `atrim=start_sample=${first}${last === undefined ? "" : `:end_sample=${last}`}`,
       ];
-      const source = fromBytes(
-        execFileSync(
-          "ffmpeg",
-          [
-            "-v",
-            "error",
-            "-xerror",
-            "-i",
-            asset.path,
-            "-map",
-            `0:a:${asset.audioStream ?? 0}`,
-            ...(filters.length ? ["-af", filters.join(",")] : []),
-            "-ar",
-            String(rate),
-            "-ac",
-            String(channels),
-            "-f",
-            "f32le",
-            "pipe:1",
-          ],
-          { maxBuffer: 1 << 30 },
-        ),
-      );
-      const start =
-          Number(a.start ?? 0) +
-          (a.startMarker && runtime
-            ? runtime.timeline.marker(a.startMarker)
-            : 0),
-        clipIn = Number(a.clipIn ?? 0),
-        clipOut = Number(a.clipOut ?? source.length / channels / rate),
-        speed = Number(a.speed ?? 1);
-      if (
-        !Number.isFinite(clipIn + clipOut + start + speed) ||
-        clipIn < 0 ||
-        clipOut <= clipIn ||
-        speed === 0
-      )
+      let clip =
+        last !== undefined && last <= first
+          ? new Float32Array(0)
+          : fromBytes(
+              execFileSync(
+                "ffmpeg",
+                [
+                  "-v",
+                  "error",
+                  "-xerror",
+                  ...inputOptions(),
+                  "-i",
+                  asset.path,
+                  "-map",
+                  `0:a:${asset.audioStream ?? 0}`,
+                  "-af",
+                  filters.join(","),
+                  "-ar",
+                  String(rate),
+                  "-ac",
+                  String(channels),
+                  "-f",
+                  "f32le",
+                  "pipe:1",
+                ],
+                { maxBuffer: 2 ** 32 },
+              ),
+            );
+      if (!clip.length && last === undefined)
         throw new Error(`invalid audio trim/speed for ${id}`);
-      let clip = source.slice(
-        Math.round(clipIn * rate) * channels,
-        Math.round(clipOut * rate) * channels,
-      );
       if (a.reverse === true || speed < 0) {
         const copy = clip.slice(),
           count = clip.length / channels;

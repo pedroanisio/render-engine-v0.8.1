@@ -3,6 +3,8 @@ import { propertyValue, simple } from '../eval/value.js';
 import { timecode, fpsOf } from '../eval/clock.js';
 /** @typedef {import('../xsd/validate.js').ValidNode} Node */
 /** @typedef {import('../eval/value.js').Value} Value */
+/** Longest parameter value tested against a @pattern (ReDoS mitigation). */
+export const MAX_PATTERN_INPUT = 10000;
 /** @typedef {{parameters?:Record<string,Value>,variant?:string,layout?:string,data?:string,row?:number,read?:(src:string)=>string}} ParameterOptions */
 /** RFC4180 quoting, shared by CSV and TSV. @param {string} source @param {string} delimiter */
 export function rows(source, delimiter) {
@@ -126,8 +128,14 @@ export function resolveParameters(
       throw new Error(`parameter ${id} outside bounds`);
     if (a.maxLength !== undefined && text.length > Number(a.maxLength))
       throw new Error(`parameter ${id} too long`);
-    if (a.pattern !== undefined && !new RegExp(String(a.pattern), 'u').test(text))
-      throw new Error(`parameter ${id} does not match pattern`);
+    if (a.pattern !== undefined) {
+      // XSD-style whole-value match. Backtracking regexes can be exponential,
+      // so only values up to MAX_PATTERN_INPUT characters are matched at all.
+      if (text.length > MAX_PATTERN_INPUT)
+        throw new Error(`parameter ${id} exceeds ${MAX_PATTERN_INPUT} characters for pattern matching`);
+      if (!new RegExp(`^(?:${String(a.pattern)})$`, 'u').test(text))
+        throw new Error(`parameter ${id} does not match pattern`);
+    }
     if (
       a.options !== undefined &&
       !String(a.options)

@@ -84,6 +84,17 @@ export function destinationPlan(n, env = process.env) {
       throw new Error(
         `${kind} requires a signed upload URL in its environment profile`,
       );
+    // Secret-bearing headers go only to a destination the profile itself names:
+    // its own `url`, the exact `resource` URI, or an explicit `origin`.
+    if (
+      !profile.url &&
+      Object.keys(profile.headers ?? {}).length &&
+      profile.resource !== uri &&
+      profile.origin !== url.origin
+    )
+      throw new Error(
+        "Credential profile with headers must bind its destination (url, resource or origin)",
+      );
   }
   return { kind, uri: kind === "sftp" ? uri : endpoint, profile };
 }

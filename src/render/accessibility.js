@@ -1,25 +1,27 @@
 /** Deterministic accessibility diagnostics for the exported interval. */
-import { execFileSync } from "node:child_process";
+import { spawn } from "node:child_process";
 /** @typedef {import('../xsd/validate.js').ValidNode} Node */
 /** @param {number} v */
 const linear = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
-/** General/red flash checks on the decoded output, in sliding one-second windows.
+/** Incremental general/red flash checks on decoded output, in sliding one-second
+ * windows; memory is bounded by one frame of per-pixel state plus a one-second history.
  * The reference display uses a 10-degree viewport of one third of the picture width/height.
- * @param {Uint8Array} rgb @param {number} width @param {number} height @param {number} fps */
-export function flashAnalysis(rgb, width, height, fps) {
+ * @param {number} width @param {number} height @param {number} fps */
+export function flashAnalyzer(width, height, fps) {
   const pixels = width * height,
-    frames = Math.floor(rgb.length / (pixels * 3)),
     previous = new Float32Array(pixels),
     redPrevious = new Float32Array(pixels),
     direction = new Int8Array(pixels),
     redDirection = new Int8Array(pixels),
     count = new Uint8Array(pixels),
-    history = [];
+    /** @type {Uint8Array[]} */ history = [];
   /** @type {Array<{time:number,area:number}>} */ const findings = [];
-  for (let frame = 0; frame < frames; frame++) {
+  let frame = 0;
+  /** @param {Uint8Array} rgb one rgb24 frame */
+  const push = (rgb) => {
     const flashes = new Uint8Array(pixels);
     for (let p = 0; p < pixels; p++) {
-      const at = (frame * pixels + p) * 3,
+      const at = p * 3,
         r = linear(Number(rgb[at]) / 255),
         g = linear(Number(rgb[at + 1]) / 255),
         b = linear(Number(rgb[at + 2]) / 255),
@@ -87,13 +89,77 @@ export function flashAnalysis(rgb, width, height, fps) {
       (!findings.length || frame / fps - Number(findings.at(-1)?.time) >= 1)
     )
       findings.push({ time: frame / fps, area: maximum });
-  }
-  return {
-    frames,
-    fps,
-    referenceViewport: "one-third width × one-third height; 25% area threshold",
-    findings,
+    frame++;
   };
+  return {
+    push,
+    result: () => ({
+      frames: frame,
+      fps,
+      referenceViewport:
+        "one-third width × one-third height; 25% area threshold",
+      findings,
+    }),
+  };
+}
+/** Flash checks over an in-memory rgb24 frame sequence.
+ * @param {Uint8Array} rgb @param {number} width @param {number} height @param {number} fps */
+export function flashAnalysis(rgb, width, height, fps) {
+  const analyzer = flashAnalyzer(width, height, fps),
+    size = width * height * 3;
+  for (let at = 0; at + size <= rgb.length; at += size)
+    analyzer.push(rgb.subarray(at, at + size));
+  return analyzer.result();
+}
+/** Decodes `video` frame by frame from an FFmpeg pipe (bounded memory, any duration).
+ * @param {string} video @param {number} width @param {number} height @param {number} fps */
+export async function flashAnalysisStream(video, width, height, fps) {
+  const analyzer = flashAnalyzer(width, height, fps),
+    size = width * height * 3,
+    child = spawn(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-i",
+        video,
+        "-vf",
+        `scale=${width}:${height}:flags=area`,
+        "-pix_fmt",
+        "rgb24",
+        "-f",
+        "rawvideo",
+        "pipe:1",
+      ],
+      { stdio: ["ignore", "pipe", "pipe"] },
+    );
+  /** @type {Buffer[]} */ const errors = [];
+  child.stderr.on("data", (c) => errors.push(c));
+  const exited = new Promise((ok, fail) => {
+    child.on("error", fail);
+    child.on("close", (code) => ok(code));
+  });
+  const pending = Buffer.alloc(size);
+  let filled = 0;
+  for await (const chunk of child.stdout) {
+    let at = 0;
+    while (at < chunk.length) {
+      const n = Math.min(size - filled, chunk.length - at);
+      chunk.copy(pending, filled, at, at + n);
+      filled += n;
+      at += n;
+      if (filled === size) {
+        analyzer.push(pending);
+        filled = 0;
+      }
+    }
+  }
+  const code = await exited;
+  if (code !== 0)
+    throw new Error(
+      `flash analysis decode failed: ${Buffer.concat(errors).toString().trim()}`,
+    );
+  return analyzer.result();
 }
 /** @param {Node} scene @param {Node[]} captions @param {ReturnType<import('./audio.js').mixAudio>} mix @param {Record<string,any>} output @param {number} start @param {number} end */
 export function accessibilityRequirements(
@@ -109,13 +175,19 @@ export function accessibilityRequirements(
     ?.children.find((n) => n.name === "accessibility")?.attributes;
   if (!a) return undefined;
   const ids = Array.isArray(output.captions) ? output.captions.map(String) : [];
-  const selected = captions.filter(
-    (t) =>
-      output.burnCaptions === t.attributes.id ||
-      t.attributes.mode !== "sidecar" ||
-      !ids.length ||
-      ids.includes(String(t.attributes.id)),
-  );
+  // Mirrors the export: burned (burnCaptions, else every non-sidecar track),
+  // embedded (output@captions) and written sidecars (non-burn, filtered by ids).
+  const selected = captions.filter((t) => {
+    const id = String(t.attributes.id),
+      mode = t.attributes.mode;
+    return (
+      (output.burnCaptions
+        ? output.burnCaptions === t.attributes.id
+        : mode !== "sidecar") ||
+      ids.includes(id) ||
+      (mode !== "burn" && !ids.length)
+    );
+  });
   const cues = selected
     .flatMap((t) => t.children)
     .filter(
@@ -176,7 +248,14 @@ export function accessibilityRequirements(
   };
 }
 /** @param {string} video @param {import('./frame.js').FrameRenderer} renderer @param {NonNullable<ReturnType<typeof accessibilityRequirements>>} config @param {number} start @param {number} end @param {number} fps */
-export function accessibilityReport(video, renderer, config, start, end, fps) {
+export async function accessibilityReport(
+  video,
+  renderer,
+  config,
+  start,
+  end,
+  fps,
+) {
   /** @type {Array<{check:string,message:string,severity:string,time?:number}>} */ const findings =
     [];
   let flash;
@@ -186,24 +265,7 @@ export function accessibilityReport(video, renderer, config, start, end, fps) {
         1,
         Math.round((renderer.height / renderer.width) * width),
       );
-    const rgb = execFileSync(
-      "ffmpeg",
-      [
-        "-v",
-        "error",
-        "-i",
-        video,
-        "-vf",
-        `scale=${width}:${height}:flags=area`,
-        "-pix_fmt",
-        "rgb24",
-        "-f",
-        "rawvideo",
-        "pipe:1",
-      ],
-      { maxBuffer: 1 << 30 },
-    );
-    flash = flashAnalysis(rgb, width, height, fps);
+    flash = await flashAnalysisStream(video, width, height, fps);
     for (const f of flash.findings)
       findings.push({
         check: "flash",

@@ -58,8 +58,9 @@ is rejected.
 Output `start/end` and CLI ranges are half-open composition intervals aligned up
 to output-frame boundaries. The full project audio is mixed before trimming, so
 fades, ducking, tails and normalization have the same history in partial exports.
-Captions and chapter ranges are clipped/rebased. Non-drop-frame timecode advances
-by the export offset. Segment concat durations are supplied explicitly to prevent
+Captions and chapter ranges are clipped/rebased. Timecode advances by the export
+offset in frames: non-drop-frame (`:`) at the nominal rate, drop-frame (`;`, 29.97
+and 59.94 only) with drop-frame labels. Unparsable or dropped labels are rejected. Segment concat durations are supplied explicitly to prevent
 millisecond container timestamp rounding from accumulating across cuts.
 
 Frames reach regular exporters as straight-alpha RGBA16; RGB is unassociated
@@ -73,11 +74,12 @@ settings and tone mapping for the intended master.
 Output primaries, transfer and range are converted/tagged. H.265 accepts `maxCLL`,
 `maxFALL` and x265 `G(...)B(...)R(...)WP(...)L(...)` mastering metadata. Other codecs
 reject these static-HDR fields rather than falsely claiming to write them.
-Camera-log/ACES encodings lack matching standard container transfer tags; sample
+Camera-log/ACES encodings and DCI-P3 gamma 2.6 lack matching standard container
+transfer tags and are left untagged (linear encodings are tagged `linear`); sample
 encoding remains declared in the accompanying assets manifest.
 
 Metadata embedding includes standard metadata attributes, custom `<meta>` values,
-asset credits/licenses and marker chapters where supported by the container.
+asset credits/licenses and `kind="chapter"` markers as chapters where supported by the container.
 `embedMetadata=false` removes metadata/chapter mapping. Containers with limited
 tag dictionaries cannot retain arbitrary keys; the JSON assets manifest remains
 the authoritative provenance record. MP4/MOV spherical boxes honor
@@ -110,6 +112,9 @@ destinations receive one deterministic ZIP containing all numbered frames.
 
 If the signed endpoint differs from the XML URI, `resource` must exactly match
 the XML URI; a credential profile cannot silently redirect a different target.
+A profile that carries `headers` must also bind its destination through `url`,
+`resource` (the exact XML URI) or `origin` (the XML URI's origin); credential
+headers are never sent to an unbound URI taken from the scene XML.
 For SFTP use `{"keyFile":"/private/path/to/key"}`. No password, key contents or
 signed URL belongs in XML. Credential objects are never written into render
 manifests. HTTP delivery has a 60-second timeout and rejects redirects. Live cloud
@@ -122,7 +127,10 @@ uses verified visual caches and retries delivery.
 
 Visual intermediates are FFV1/16-bit, or float NUT for EXR. Keys include scene,
 expanded includes/data/variants, renderer/native/FFmpeg version, geometry/FPS,
-color choices and resource hashes. Videos, sequences, fonts, LUTs, meshes, maps,
+the selected output's id and full attribute set (alpha, colour space/transfer,
+burnt-in captions and every other output choice), representation, and resource
+hashes. Each shot's key covers the images its layers and particle emitters
+(`sprite`, `emitterAsset`) draw, plus those of any track matte it references. Videos, sequences, fonts, LUTs, meshes, maps,
 generated assets and simulation dependencies enter the dependency audit. Simple
 image-only shots invalidate independently; complex/temporal dependencies and
 fonts deliberately invalidate conservatively. Every reused segment must match
@@ -131,6 +139,11 @@ becomes a successful cache hit.
 
 Runs have isolated temporary directories. Output locks prevent concurrent writers
 to the same final path, with stale-PID recovery on the same host/PID namespace.
+A lock file without a readable owner (a crash between creating and writing it)
+is treated as stale after 10 seconds. Recovery is serialised through a sibling
+`.reap` lock and re-checks staleness before removing anything, so concurrent
+recoverers cannot delete a lock another renderer has just taken; releasing only
+removes a lock that is still the renderer's own, and tolerates it being gone.
 These are not distributed locks across machines or isolated PID namespaces.
 Publication copies onto the target filesystem and then renames atomically; each
 sequence member is atomic, while a sequence as a whole is not a filesystem
@@ -146,7 +159,11 @@ threads, each holding its own renderer and decoded media, and feeds them to the
 segment encoder in order; by default a render of at least 24 frames uses half the
 cores, at most four and no more renderers than free memory holds, shard processes
 use one, and `--threads 1` selects the serial path. Frames do not depend on
-rendering order, so segment digests are identical either way. FFprobe results are
+rendering order, so segment digests are identical either way. Workers build
+their renderer from the exact scene bytes and include/data text the pipeline
+hashed, never from a later read of the disk. `--jobs` passes list and object
+parameters to shard processes as JSON. External processes (shards, encoders)
+have no implicit time limit; they run until finished or cancelled. FFprobe results are
 cached in the OS temp directory (`scene-render-probe-cache.json`), keyed by the
 absolute path, size, modification time and ffprobe version.
 Work storage must have room for lossless intermediates and audio stems.

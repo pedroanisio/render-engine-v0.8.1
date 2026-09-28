@@ -39,7 +39,8 @@ const XSI_HINTS = new Set(['schemaLocation', 'noNamespaceSchemaLocation']);
  * @typedef {object} ValidationResult
  * @property {ValidNode} tree
  * @property {ReadonlyMap<string, ValidNode>} ids
- * @property {Diagnostic[]} diagnostics
+ * @property {Diagnostic[]} diagnostics  at most `maxDiagnostics` entries
+ * @property {boolean} valid  false when any problem was found, even if unreported
  */
 
 /** @param {ValidNode} n */
@@ -74,6 +75,9 @@ export function createValidator(model) {
    */
   function validate(root, options = {}) {
     const cap = options.maxDiagnostics ?? 100;
+    // Validity is tracked apart from the reporting cap: a cap of 0 (or any
+    // cap that truncates) must never turn an invalid document into a valid one.
+    let errors = 0;
     /** @type {Diagnostic[]} */
     const diagnostics = [];
     /** @type {Map<string, ValidNode>} */
@@ -89,6 +93,7 @@ export function createValidator(model) {
      * @param {string} path
      */
     const report = (code, stage, message, at, path) => {
+      errors++;
       if (diagnostics.length < cap)
         diagnostics.push(diagnostic(code, stage, message, at.loc, path));
     };
@@ -112,7 +117,9 @@ export function createValidator(model) {
      * @returns {ValidNode}
      */
     function element(el, typeName, path) {
-      const def = /** @type {import('./model.js').ComplexTypeDef} */ (model.complexTypes[typeName]);
+      const def = /** @type {import('./model.js').ComplexTypeDef} */ (
+        Object.hasOwn(model.complexTypes, typeName) ? model.complexTypes[typeName] : undefined
+      );
       /** @type {Record<string, TypedValue>} */
       const attributes = {};
       /** @type {ValidNode[]} */
@@ -140,7 +147,8 @@ export function createValidator(model) {
           }
           continue;
         }
-        const ad = a.ns === '' ? def.attributes[a.local] : undefined;
+        const ad =
+          a.ns === '' && Object.hasOwn(def.attributes, a.local) ? def.attributes[a.local] : undefined;
         if (!ad) {
           report(
             Codes.ATTR_UNKNOWN,
@@ -247,7 +255,9 @@ export function createValidator(model) {
         names.push(c.name);
         const k = (counts.get(c.name) ?? 0) + 1;
         counts.set(c.name, k);
-        const childType = content.elementTypes[c.name];
+        const childType = Object.hasOwn(content.elementTypes, c.name)
+          ? content.elementTypes[c.name]
+          : undefined;
         if (childType) children.push(element(c, childType, `${path}/${c.name}[${k}]`));
       }
       const m = matcher(typeName, content.particle).match(names);
@@ -348,7 +358,7 @@ export function createValidator(model) {
           r.node.path,
         );
     }
-    return { tree: freeze(tree), ids, diagnostics };
+    return { tree: freeze(tree), ids, diagnostics, valid: errors === 0 };
   }
 
   return { validate, simple };

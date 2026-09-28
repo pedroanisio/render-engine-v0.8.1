@@ -344,7 +344,8 @@ test("parameters bind with declared precedence, constraints, substitution and da
     ["boolean", "true", true],
     ["boolean", "0", false],
     ["list", "[1,2]", [1, 2]],
-    ["time", "00:00:01:00", 1],
+    // Non-drop-frame labels count nominal 30 fps frames: 30 frames at 30000/1001.
+    ["time", "00:00:01:00", 30 / (30000 / 1001)],
     ["color", "#FF0000", "#FF0000"],
   ])
     assert.deepEqual(

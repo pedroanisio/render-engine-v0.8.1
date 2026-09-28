@@ -20,11 +20,22 @@ import { outputPlan } from "./export.js";
 /** @typedef {import('../xsd/validate.js').ValidNode} SceneNode */
 /** @typedef {import('./pipeline.js').RenderOptions} RenderOptions */
 
-/** @param {RenderOptions} o */
-export async function createRenderer(o) {
+/**
+ * @typedef {object} SceneSnapshot exact inputs a renderer was built from, so frame
+ * workers render the bytes the pipeline hashed rather than re-reading the disk.
+ * @property {Uint8Array} sceneBytes
+ * @property {Record<string, string>} reads text files (includes, data) read while compiling
+ */
+
+/** @param {RenderOptions} o @param {SceneSnapshot} [snapshot] */
+export async function createRenderer(o, snapshot) {
   const sceneFile = resolve(o.sceneFile);
   const base = dirname(sceneFile);
-  const sceneBytes = readFileSync(sceneFile);
+  const sceneBytes = snapshot
+    ? Buffer.from(snapshot.sceneBytes)
+    : readFileSync(sceneFile);
+  /** @type {Record<string, string>} */
+  const reads = Object.create(null);
   const loaded = loadScene(sceneBytes.toString("utf8"));
   if (!loaded.ok)
     throw new Error(`scene is invalid: ${loaded.diagnostics[0]?.message}`);
@@ -43,6 +54,7 @@ export async function createRenderer(o) {
     ),
     {
       expand: true,
+      root: base,
       load: loadScene,
       parameters: o.parameters,
       variant:
@@ -56,7 +68,14 @@ export async function createRenderer(o) {
           : String(selected.attributes.layout),
       data: o.data,
       row: o.row,
-      read: (p) => readFileSync(assetPath(base, p), "utf8"),
+      read: (p) => {
+        if (snapshot) {
+          if (!Object.hasOwn(snapshot.reads, p))
+            throw new Error(`scene input ${p} was not read by the pipeline`);
+          return /** @type {string} */ (snapshot.reads[p]);
+        }
+        return (reads[p] ??= readFileSync(assetPath(base, p), "utf8"));
+      },
       audioAmplitude: (id, t, band) => analyze(id, t, band),
     },
   );
@@ -171,6 +190,7 @@ export async function createRenderer(o) {
       sceneFile,
       base,
       sceneBytes,
+      reads,
       loaded,
       selected,
       runtime,

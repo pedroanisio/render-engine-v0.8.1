@@ -6,6 +6,7 @@
  * are pure functions of their seed and the frame index.
  */
 import { Surface } from "./surface.js";
+import { framePosition, frameIndex } from "../eval/frames.js";
 
 /** @typedef {import('./surface.js').Rect} Rect */
 
@@ -112,7 +113,8 @@ export function scanlines(s, r, p) {
 }
 
 /**
- * Three-pass box blur of one channel (approximates a Gaussian of sigma ~ radius / 2).
+ * Three-pass box blur of one channel (approximates a Gaussian of sigma ~ radius / 2);
+ * samples outside the surface are transparent.
  * @param {Float32Array} v @param {number} w @param {number} h @param {number} radius
  * @returns {Float32Array}
  */
@@ -130,16 +132,14 @@ export function blur(v, w, h, radius) {
       for (let l = 0; l < lines; l++) {
         const at = (/** @type {number} */ k) =>
           horizontal ? l * w + k : k * w + l;
+        // Samples outside the surface are transparent (zero coverage).
         let sum = 0;
-        for (let k = -r; k <= r; k++)
-          sum += /** @type {number} */ (
-            src[at(Math.min(n - 1, Math.max(0, k)))]
-          );
+        for (let k = 0; k <= Math.min(r, n - 1); k++)
+          sum += /** @type {number} */ (src[at(k)]);
         for (let k = 0; k < n; k++) {
           tmp[at(k)] = sum / (2 * r + 1);
-          sum +=
-            /** @type {number} */ (src[at(Math.min(n - 1, k + r + 1))]) -
-            /** @type {number} */ (src[at(Math.max(0, k - r))]);
+          if (k + r + 1 < n) sum += /** @type {number} */ (src[at(k + r + 1)]);
+          if (k - r >= 0) sum -= /** @type {number} */ (src[at(k - r)]);
         }
       }
       [src, tmp] = [tmp, src];
@@ -216,9 +216,9 @@ export function ellipseMask(s, r, p) {
 export function rain(s, clip, e, t, scale) {
   const first = Math.max(
     0,
-    Math.ceil((t - e.lifetime - (e.start - e.preroll)) * e.rate),
+    Math.ceil(framePosition(t - e.lifetime - (e.start - e.preroll), e.rate)),
   );
-  const last = Math.floor((t - (e.start - e.preroll)) * e.rate);
+  const last = frameIndex(t - (e.start - e.preroll), e.rate);
   const [cr, cg, cb, ca] = e.color;
   const half = (e.size * scale) / 2;
   for (let i = Math.max(first, last - e.maxParticles + 1); i <= last; i++) {

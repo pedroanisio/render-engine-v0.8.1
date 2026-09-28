@@ -34,8 +34,13 @@ export function createSimpleTypes(defs) {
     if (hit) return hit;
     if (building.has(name)) throw new Error(`circular simple type ${name}`);
     building.add(name);
-    const v = build(name);
-    building.delete(name);
+    /** @type {Validator} */
+    let v;
+    try {
+      v = build(name);
+    } finally {
+      building.delete(name);
+    }
     compiled.set(name, v);
     return v;
   }

@@ -1,12 +1,88 @@
 import sharp from "sharp";
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, renameSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import {
+  readFileSync,
+  writeFileSync,
+  renameSync,
+  statSync,
+  mkdtempSync,
+  rmSync,
+} from "node:fs";
+import { join, resolve, extname } from "node:path";
 import { tmpdir } from "node:os";
 import { Surface } from "../render/surface.js";
 import { rgbaSurface } from "./color.js";
 import { fpsOf } from "./clock.js";
-/** ffprobe results keyed by file identity and probe version, so repeated runs
+import { framePosition } from "../eval/frames.js";
+/** Largest decoded image surface (float32 RGBA, 16 bytes per pixel). */
+export const MAX_IMAGE_BYTES = 1 << 30;
+/** @param {number} width @param {number} height */
+function checkPixels(width, height) {
+  const bytes = width * height * 16;
+  if (!(bytes <= MAX_IMAGE_BYTES))
+    throw new Error(
+      `image ${width}x${height} decodes to ${bytes} bytes, above the ${MAX_IMAGE_BYTES}-byte surface limit`,
+    );
+}
+/** Demuxers that open further files, devices or network streams named by the input. */
+const REFERENCING = new Set([
+  "hls",
+  "applehttp",
+  "dash",
+  "concat",
+  "ffconcat",
+  "imf",
+  "webm_dash_manifest",
+  "sdp",
+  "rtp",
+  "rtsp",
+  "sap",
+  "avisynth",
+  "vapoursynth",
+  "lavfi",
+]);
+/** @type {string|undefined} */ let demuxers;
+/** FFmpeg/ffprobe input options confining a read to the named local file: the
+ * file protocol only, and no playlist, concat, manifest or device demuxer. */
+export function inputOptions() {
+  demuxers ??= execFileSync("ffprobe", ["-hide_banner", "-demuxers"], {
+    encoding: "utf8",
+  })
+    .split("\n")
+    .flatMap((line) => {
+      const m = /^ D[ E]([ d]) (\S+)/.exec(line);
+      return m && m[1] !== "d" ? String(m[2]).split(",") : [];
+    })
+    .filter((name) => !REFERENCING.has(name))
+    .join(",");
+  return ["-protocol_whitelist", "file", "-format_whitelist", demuxers];
+}
+/** Run a path-based decoder on a private copy of the verified bytes, so the
+ * decoded data is exactly the hashed data and relative references resolve
+ * into an empty folder. @template T
+ * @param {Uint8Array} bytes @param {string} path @param {(copy:string)=>T} run */
+function withCopy(bytes, path, run) {
+  const folder = mkdtempSync(join(tmpdir(), "scene-decode-")),
+    ext = extname(path).toLowerCase();
+  try {
+    const copy = join(folder, "source" + (/^\.[a-z0-9]{1,8}$/.test(ext) ? ext : ""));
+    writeFileSync(copy, bytes);
+    return run(copy);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+}
+/** ImageMagick coder named by the file signature, never by the file itself.
+ * @param {Uint8Array} b */
+function magickCoder(b) {
+  const sig = Buffer.from(b.subarray(0, 8)).toString("latin1");
+  if (sig.startsWith("8BPS")) return "psd";
+  if (sig.startsWith("II*\0") || sig.startsWith("MM\0*")) return "tiff";
+  if (sig.startsWith("GIF8")) return "gif";
+  if (sig.startsWith("\x89PNG")) return "png";
+  if (sig.startsWith("\0\0\x01\0")) return "ico";
+  throw new Error("layered image must be PSD, TIFF, GIF, PNG or ICO");
+}/** ffprobe results keyed by file identity and probe version, so repeated runs
  * over the same assets skip the process spawns. Lives in the OS temp dir. */
 const probeCacheFile = join(tmpdir(), "scene-render-probe-cache.json");
 /** @type {Record<string, unknown>|undefined} */ let probeCache;
@@ -29,7 +105,7 @@ export function probe(path) {
     probeVersion ??= execFileSync("ffprobe", ["-version"], {
       encoding: "utf8",
     }).split("\n")[0];
-    key = `${probeVersion}|${resolve(path)}|${st.size}|${st.mtimeMs}`;
+    key = `${probeVersion}|confined|${resolve(path)}|${st.size}|${st.mtimeMs}`;
     const hit = cache[key];
     if (hit !== undefined) return structuredClone(hit);
   } catch {
@@ -38,7 +114,16 @@ export function probe(path) {
   const p = JSON.parse(
     execFileSync(
       "ffprobe",
-      ["-v", "error", "-show_streams", "-show_format", "-of", "json", path],
+      [
+        "-v",
+        "error",
+        ...inputOptions(),
+        "-show_streams",
+        "-show_format",
+        "-of",
+        "json",
+        path,
+      ],
       { encoding: "utf8", maxBuffer: 16 << 20 },
     ),
   );
@@ -64,17 +149,20 @@ export async function decodeImage(bytes, a, scale = 1, path) {
     bytes[3] === 0x01
   ) {
     if (!path) throw new Error("EXR requires a resolved source path");
-    const decoded = execFileSync(
-        process.env.SCENE_RENDER_PYTHON ?? "python3",
-        [
-          new URL("./exr-import.py", import.meta.url).pathname,
-          path,
-          String(a.layer ?? ""),
-        ],
-        { maxBuffer: 1 << 30 },
+    const decoded = withCopy(bytes, path, (copy) =>
+        execFileSync(
+          process.env.SCENE_RENDER_PYTHON ?? "python3",
+          [
+            new URL("./exr-import.py", import.meta.url).pathname,
+            copy,
+            String(a.layer ?? ""),
+          ],
+          { maxBuffer: MAX_IMAGE_BYTES + 4096 },
+        ),
       ),
       newline = decoded.indexOf(10);
     metadata = JSON.parse(decoded.subarray(0, newline).toString("utf8"));
+    checkPixels(metadata.width, metadata.height);
     const payload = decoded.subarray(newline + 1);
     raw = Float32Array.from({ length: payload.length / 4 }, (_, i) =>
       payload.readFloatLE(i * 4),
@@ -85,29 +173,43 @@ export async function decodeImage(bytes, a, scale = 1, path) {
       a = { ...a, alpha: "premultiplied" };
   } else if (a.layer !== undefined) {
     if (!path) throw new Error("layered image requires a resolved file");
-    const info = execFileSync("identify", ["-format", "%s|%l|%w|%h\\n", path], {
-      encoding: "utf8",
-    })
-      .trim()
-      .split("\n")
-      .map((line) => line.split("|"));
-    const match = info.find(
-      (row) => row[0] === String(a.layer) || row[1] === String(a.layer),
-    );
-    if (!match) throw new Error(`missing image layer ${a.layer}`);
-    metadata = { width: Number(match[2]), height: Number(match[3]) };
-    raw = execFileSync(
-      "convert",
-      [`${path}[${match[0]}]`, "-auto-orient", "-depth", "8", "RGBA:-"],
-      { maxBuffer: metadata.width * metadata.height * 4 + 1048576 },
-    );
+    const coder = magickCoder(bytes);
+    ({ raw, metadata } = withCopy(bytes, path, (copy) => {
+      const info = execFileSync(
+        "identify",
+        ["-format", "%s|%l|%w|%h\\n", `${coder}:${copy}`],
+        { encoding: "utf8" },
+      )
+        .trim()
+        .split("\n")
+        .map((line) => line.split("|"));
+      const match = info.find(
+        (row) => row[0] === String(a.layer) || row[1] === String(a.layer),
+      );
+      if (!match) throw new Error(`missing image layer ${a.layer}`);
+      const metadata = { width: Number(match[2]), height: Number(match[3]) };
+      checkPixels(metadata.width, metadata.height);
+      const raw = execFileSync(
+        "convert",
+        [
+          `${coder}:${copy}[${match[0]}]`,
+          "-auto-orient",
+          "-depth",
+          "8",
+          "RGBA:-",
+        ],
+        { maxBuffer: metadata.width * metadata.height * 4 + 1048576 },
+      );
+      return { raw, metadata };
+    }));
   } else {
     try {
       const image = sharp(Buffer.from(bytes), {
         failOn: "warning",
-        limitInputPixels: 268435456,
+        limitInputPixels: MAX_IMAGE_BYTES / 16,
       });
       const meta = await image.metadata();
+      checkPixels(Number(meta.width), Number(meta.height));
       const pipeline = image.rotate().ensureAlpha();
       const decoded =
         meta.depth === "ushort"
@@ -128,39 +230,57 @@ export async function decodeImage(bytes, a, scale = 1, path) {
         height: decoded.info.height,
       };
     } catch (error) {
-      if (!path || /\.(png|jpe?g|webp|tiff?|gif|avif)$/i.test(path))
+      if (
+        !path ||
+        /\.(png|jpe?g|webp|tiff?|gif|avif)$/i.test(path) ||
+        /surface limit/.test(String(error))
+      )
         throw error;
-      const stream = probe(path).streams.find(
-        (/** @type {any} */ s) => s.codec_type === "video",
-      );
-      if (!stream) throw new Error("image contains no video stream");
-      metadata = { width: Number(stream.width), height: Number(stream.height) };
-      raw = execFileSync(
-        "ffmpeg",
-        [
-          "-v",
-          "error",
-          "-xerror",
-          "-i",
-          path,
-          "-frames:v",
-          "1",
-          "-f",
-          "rawvideo",
-          "-pix_fmt",
-          "rgba",
-          "pipe:1",
-        ],
-        { maxBuffer: metadata.width * metadata.height * 4 + 1048576 },
-      );
+      ({ raw, metadata } = withCopy(bytes, path, (copy) => {
+        const stream = probe(copy).streams.find(
+          (/** @type {any} */ s) => s.codec_type === "video",
+        );
+        if (!stream) throw new Error("image contains no video stream");
+        const metadata = {
+          width: Number(stream.width),
+          height: Number(stream.height),
+        };
+        checkPixels(metadata.width, metadata.height);
+        const raw = execFileSync(
+          "ffmpeg",
+          [
+            "-v",
+            "error",
+            "-xerror",
+            ...inputOptions(),
+            "-i",
+            copy,
+            "-frames:v",
+            "1",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgba",
+            "pipe:1",
+          ],
+          { maxBuffer: metadata.width * metadata.height * 4 + 1048576 },
+        );
+        return { raw, metadata };
+      }));
     }
   }
   if (raw.length !== metadata.width * metadata.height * 4)
     throw new Error("truncated image");
+  const width = Math.max(
+      1,
+      Math.round(Number(a.width ?? metadata.width) * scale),
+    ),
+    height = Math.max(1, Math.round(Number(a.height ?? metadata.height) * scale));
+  checkPixels(width, height);
   const surface = resizeSurface(
     rgbaSurface(raw, metadata.width, metadata.height, a),
-    Math.max(1, Math.round(Number(a.width ?? metadata.width) * scale)),
-    Math.max(1, Math.round(Number(a.height ?? metadata.height) * scale)),
+    width,
+    height,
   );
   return { surface, metadata };
 }
@@ -210,31 +330,43 @@ export function resizeSurface(source, width, height) {
 }
 /** Accurate random-access decode. Optical flow uses FFmpeg's motion-compensated interpolator. */
 export class VideoDecoder {
-  /** @param {string} path @param {Record<string,any>} a */
-  constructor(path, a) {
+  /** `check` runs before and after every decode and throws when the source
+   * changed since it was verified.
+   * @param {string} path @param {Record<string,any>} a @param {()=>void} [check] */
+  constructor(path, a, check = () => {}) {
     this.path = path;
     this.a = a;
+    this.check = check;
     this.fps = fpsOf(a.fps).value;
+    /** Last decodable frame, learned when the declared duration overstates the stream. */
+    this.last = Infinity;
     /** @type {Map<string,Surface>} */ this.frames = new Map();
     this.bytes = 0;
   }
   /** @param {number} time @param {number} scale @param {string} [blend] @returns {Surface} */
   frame(time, scale, blend = "none") {
-    const a = this.a,
-      t = Math.max(0, Math.min(Number(a.duration) - 1 / this.fps, time)),
-      frame = t * this.fps,
-      index = Math.floor(frame),
-      fraction = frame - index;
+    const t = Math.max(0, Math.min(Number(this.a.duration) - 1 / this.fps, time)),
+      position = framePosition(t, this.fps),
+      index = Math.floor(position),
+      fraction = position - index;
     if (blend === "frame-mix" && fraction > 1e-8) {
-      const x = this.frame(index / this.fps, scale),
-        y = this.frame((index + 1) / this.fps, scale),
+      const x = this.decode(index, t, scale, "none"),
+        y = this.decode(index + 1, t, scale, "none"),
         out = new Surface(x.width, x.height);
       for (let i = 0; i < out.data.length; i++)
         out.data[i] =
           Number(x.data[i]) * (1 - fraction) + Number(y.data[i]) * fraction;
       return out;
     }
-    const key = `${blend}:${blend === "optical-flow" ? Math.round(t * 1024) : index}:${scale}`,
+    return this.decode(index, t, scale, blend);
+  }
+  /** Decode frame `index` (or source time `t` for optical flow), stepping back
+   * to the last frame the stream actually holds.
+   * @param {number} index @param {number} t @param {number} scale @param {string} blend @param {number} [back] @returns {Surface} */
+  decode(index, t, scale, blend, back = Math.ceil(this.fps)) {
+    index = Math.min(index, this.last);
+    const a = this.a,
+      key = `${blend}:${blend === "optical-flow" ? Math.round(t * 1024) : index}:${scale}`,
       hit = this.frames.get(key);
     if (hit) return hit;
     const w = Math.max(
@@ -257,6 +389,7 @@ export class VideoDecoder {
     if (rotation === 90) filters.push("transpose=clock");
     if (rotation === 270) filters.push("transpose=cclock");
     if (rotation === 180) filters.push("hflip", "vflip");
+    this.check();
     const raw = execFileSync(
       "ffmpeg",
       [
@@ -264,6 +397,7 @@ export class VideoDecoder {
         "error",
         "-xerror",
         "-noautorotate",
+        ...inputOptions(),
         ...(blend === "optical-flow" ? [] : ["-ss", String(index / this.fps)]),
         "-i",
         this.path,
@@ -280,8 +414,17 @@ export class VideoDecoder {
       ],
       { maxBuffer: w * h * 4 + 1048576 },
     );
-    if (raw.length !== w * h * 4)
+    this.check();
+    if (raw.length !== w * h * 4) {
+      // A declared duration within tolerance of the stream may name a frame
+      // past its end: clamp to the last frame that exists (within a second).
+      if (blend !== "optical-flow" && index > 0 && back > 0 && !raw.length) {
+        const previous = this.decode(index - 1, t, scale, blend, back - 1);
+        this.last = Math.min(this.last, index - 1);
+        return previous;
+      }
       throw new Error(`video frame unavailable at ${t}: ${this.path}`);
+    }
     const out = rgbaSurface(
         raw,
         rotation % 180 ? h : w,

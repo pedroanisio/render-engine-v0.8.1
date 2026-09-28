@@ -2,16 +2,31 @@ import { parameterPoint, motionPath } from "./path.js";
 import { svgPathProperties } from "svg-path-properties";
 import { compileAnimations } from "./track.js";
 import { clocks, instanceTime } from "./clock.js";
-import { MODEL } from "../generated/model.js";
-import { add, interpolate, propertyValue, spring } from "./value.js";
+import {
+  add,
+  declaredAttribute,
+  interpolate,
+  propertyValue,
+  spring,
+} from "./value.js";
 import { compileExpression, noise } from "./expression.js";
 import { easing } from "./curves.js";
+import { framePosition, frameIndex } from "./frames.js";
 import { semanticRules } from "../scene/preflight.js";
 import { expandScene } from "../scene/expand.js";
 import { resolveParameters } from "../scene/parameters.js";
 /** @typedef {import('../xsd/validate.js').ValidNode} Node */
 /** @typedef {import('./value.js').Value} Value */
 /** @typedef {import('../scene/parameters.js').ParameterOptions & import('../scene/expand.js').Options & {expand?:boolean,audioAmplitude?:(id:string,time:number,band:string)=>number}} RuntimeOptions */
+/** Property evaluations (cache misses) allowed per top-level `value()` call. */
+export const EVALUATION_BUDGET = 100000;
+/** FNV-1a 32-bit string hash. @param {string} text */
+const hash = (text) => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++)
+    h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return h >>> 0;
+};
 const clamp = (
   /** @type {number} */ x,
   /** @type {number} */ a = 0,
@@ -82,8 +97,18 @@ export function compileRuntime(
       throw new Error(`unknown property reference ${ref}`);
     return { node, property };
   };
+  /** Default seed: the project seed mixed with the owner's identity and property,
+   * so sibling properties draw independent streams. @param {Node} node @param {string} property */
+  const derivedSeed = (node, property) =>
+    (projectSeed ^ hash(`${key(node)}.${property}`)) >>> 0;
   /** @param {Node} node @param {number} time @param {string} property @param {Value} base @param {number} [seed] */
-  const context = (node, time, property, base, seed = 0) => {
+  const context = (
+    node,
+    time,
+    property,
+    base,
+    seed = derivedSeed(node, property),
+  ) => {
     let invocation = 0;
     const expressionTime = timeline.spans.get(node)?.composition(time) ?? time;
     /** @param {Value[]} args @param {(u:number)=>number} curve */
@@ -102,7 +127,7 @@ export function compileRuntime(
         fn(Number(x));
     /** @type {import('./expression.js').Context} */ const c = {
       time,
-      frame: time * timeline.fps.value,
+      frame: framePosition(time, timeline.fps.value),
       value: base,
       index: 0,
       count: 1,
@@ -134,7 +159,11 @@ export function compileRuntime(
         return (
           Number(a) +
           (Number(b) - Number(a)) *
-            noise(seed, expressionTime * timeline.fps.value, invocation++)
+            noise(
+              seed,
+              frameIndex(expressionTime, timeline.fps.value),
+              invocation++,
+            )
         );
       },
       noise: (...args) => noise(seed, ...args.map(Number)) * 2 - 1,
@@ -228,7 +257,7 @@ export function compileRuntime(
     if (node.context) Object.assign(c, node.context);
     const ct = timeline.spans.get(node)?.composition(time) ?? time;
     c.time = ct;
-    c.frame = ct * timeline.fps.value;
+    c.frame = framePosition(ct, timeline.fps.value);
     return c;
   };
   /** @param {Node} node @param {string} prop @param {number} time @returns {Value|undefined} */
@@ -242,116 +271,142 @@ export function compileRuntime(
     return result;
   };
   /** @type {Set<string>} */ const active = new Set();
+  // value(node, prop, time) is pure for its key (context index/textIndex are
+  // fixed outside textSelector), so one top-level evaluation memoizes nested
+  // prop()/link reads and bounds its total work.
+  /** @type {Map<string,Value|undefined>} */ const memo = new Map();
+  let work = 0;
   /** @param {Node} node @param {string} prop @param {number} time @returns {Value|undefined} */
   const value = (node, prop, time) => {
     if (node.name === "textAnimator" && prop === "selector")
       return node.attributes.selector;
     if (!Number.isFinite(time))
       throw new Error("evaluation time must be finite");
-    const label = `${key(node)}.${prop}`;
+    const label = `${key(node)}.${prop}`,
+      id = `${label}@${time}`;
+    if (memo.has(id)) return memo.get(id);
     if (active.has(label)) throw new Error(`dependency cycle at ${label}`);
+    if (++work > EVALUATION_BUDGET)
+      throw new Error(
+        `evaluation budget exceeded at ${label}: more than ${EVALUATION_BUDGET} property evaluations (nested links/prop references fan out too far)`,
+      );
+    const top = active.size === 0;
     active.add(label);
     try {
-      let result = baseValue(node, prop, time);
-      for (const c of node.children) {
-        const a = c.attributes;
-        if (c.name === "motionPath" && ["x", "y", "rotation"].includes(prop)) {
-          const path = paths.get(c);
-          if (!path) continue;
-          const span = timeline.spans.get(c),
-            start = span?.start ?? 0,
-            end = span?.end ?? timeline.duration;
-          const progress = baseValue(c, "progress", time);
-          let u = clamp(
-            progress === undefined
-              ? ((span?.composition(time) ?? time) - start) / (end - start || 1)
-              : Number(progress),
-          );
-          u = easing(String(a.interpolation))(u);
-          const distance = u * path.getTotalLength();
-          const point =
-            a.constantSpeed === false
-              ? parameterPoint(path, u)
-              : path.getPointAtLength(distance);
-          let tangent = path.getTangentAtLength(distance);
-          if (a.constantSpeed === false) {
-            const before = parameterPoint(path, Math.max(0, u - 1e-6)),
-              after = parameterPoint(path, Math.min(1, u + 1e-6));
-            tangent = { x: after.x - before.x, y: after.y - before.y };
-          }
-          if (prop === "rotation") {
-            if (a.autoOrient === true)
-              result =
-                (Math.atan2(tangent.y, tangent.x) * 180) / Math.PI +
-                Number(a.orientOffset);
-          } else result = prop === "x" ? point.x : point.y;
-        }
-        if (a.property !== prop) continue;
-        if (c.name === "expression" && a.enabled !== false)
-          result = expressions
-            .get(c)
-            ?.evaluate(
-              context(
-                node,
-                time,
-                prop,
-                result ?? 0,
-                a.seed === undefined
-                  ? projectSeed
-                  : Number(BigInt(String(a.seed)) & 0xffffffffn),
-              ),
-            );
-        if (c.name === "link") {
-          /** @param {number} t */ const source = (t) => {
-            const s = String(a.source),
-              parts = s.split(":");
-            if (parts[0] === "param") {
-              const p = params[String(parts[1])];
-              if (p === undefined)
-                throw new Error(`unknown parameter ${parts[1]}`);
-              return Number(p);
-            }
-            if (parts[0] === "marker") return timeline.marker(parts[1]);
-            if (parts[0] === "audio") {
-              if (!options.audioAmplitude)
-                throw new Error("audio link needs an audio analysis provider");
-              return options.audioAmplitude(
-                String(parts[1]),
-                t,
-                parts[2] ?? "all",
-              );
-            }
-            const r = reference(s);
-            return Number(value(r.node, r.property, t));
-          };
-          const t = time - Number(a.delay),
-            window = Number(a.smoothing);
-          let v = source(t);
-          // Fixed 32-panel trapezoidal window; absolute sampling makes seeking reproducible.
-          if (window > 0) {
-            v = (v + source(t - window)) / 2;
-            for (let i = 1; i < 32; i++) v += source(t - (window * i) / 32);
-            v /= 32;
-          }
-          result = clamp(
-            v * Number(a.scale) + Number(a.offset),
-            Number(a.min ?? -Infinity),
-            Number(a.max ?? Infinity),
-          );
-        }
-      }
-      if (
-        result !== undefined &&
-        (node.children.some(
-          (c) => c.attributes.property === prop && c.name !== "animate",
-        ) ||
-          node.children.some((c) => c.name === "motionPath"))
-      )
-        result = propertyValue(node, prop, String(result));
+      const result = evaluate(node, prop, time);
+      memo.set(id, result);
       return result;
     } finally {
       active.delete(label);
+      if (top) {
+        memo.clear();
+        work = 0;
+      }
     }
+  };
+  /** @param {Node} node @param {string} prop @param {number} time @returns {Value|undefined} */
+  const evaluate = (node, prop, time) => {
+    let result = baseValue(node, prop, time);
+    for (const c of node.children) {
+      const a = c.attributes;
+      if (c.name === "motionPath" && ["x", "y", "rotation"].includes(prop)) {
+        const path = paths.get(c);
+        if (!path) continue;
+        const span = timeline.spans.get(c),
+          start = span?.start ?? 0,
+          end = span?.end ?? timeline.duration;
+        const progress = baseValue(c, "progress", time);
+        let u = clamp(
+          progress === undefined
+            ? ((span?.composition(time) ?? time) - start) / (end - start || 1)
+            : Number(progress),
+        );
+        u = easing(String(a.interpolation))(u);
+        const distance = u * path.getTotalLength();
+        const point =
+          a.constantSpeed === false
+            ? parameterPoint(path, u)
+            : path.getPointAtLength(distance);
+        let tangent = path.getTangentAtLength(distance);
+        if (a.constantSpeed === false) {
+          const before = parameterPoint(path, Math.max(0, u - 1e-6)),
+            after = parameterPoint(path, Math.min(1, u + 1e-6));
+          tangent = { x: after.x - before.x, y: after.y - before.y };
+        }
+        if (prop === "rotation") {
+          if (a.autoOrient === true)
+            result =
+              (Math.atan2(tangent.y, tangent.x) * 180) / Math.PI +
+              Number(a.orientOffset);
+        } else result = prop === "x" ? point.x : point.y;
+      }
+      if (a.property !== prop) continue;
+      if (c.name === "expression" && a.enabled !== false)
+        result = expressions
+          .get(c)
+          ?.evaluate(
+            context(
+              node,
+              time,
+              prop,
+              result ?? 0,
+              a.seed === undefined
+                ? undefined
+                : Number(BigInt(String(a.seed)) & 0xffffffffn),
+            ),
+          );
+      if (c.name === "link") {
+        /** @param {number} t */ const source = (t) => {
+          const s = String(a.source),
+            parts = s.split(":");
+          if (parts[0] === "param") {
+            const p = params[String(parts[1])];
+            if (p === undefined)
+              throw new Error(`unknown parameter ${parts[1]}`);
+            return Number(p);
+          }
+          if (parts[0] === "marker") return timeline.marker(parts[1]);
+          if (parts[0] === "audio") {
+            if (!options.audioAmplitude)
+              throw new Error("audio link needs an audio analysis provider");
+            return options.audioAmplitude(
+              String(parts[1]),
+              t,
+              parts[2] ?? "all",
+            );
+          }
+          const r = reference(s);
+          return Number(value(r.node, r.property, t));
+        };
+        const t = time - Number(a.delay),
+          window = Number(a.smoothing);
+        let v = source(t);
+        // Fixed 32-panel trapezoidal window; absolute sampling makes seeking reproducible.
+        if (window > 0) {
+          v = (v + source(t - window)) / 2;
+          for (let i = 1; i < 32; i++) v += source(t - (window * i) / 32);
+          v /= 32;
+        }
+        result = clamp(
+          v * Number(a.scale) + Number(a.offset),
+          Number(a.min ?? -Infinity),
+          Number(a.max ?? Infinity),
+        );
+      }
+    }
+    if (
+      result !== undefined &&
+      (node.children.some(
+        (c) => c.attributes.property === prop && c.name !== "animate",
+      ) ||
+        node.children.some((c) => c.name === "motionPath"))
+    )
+      result = propertyValue(
+        node,
+        prop,
+        Array.isArray(result) ? result.join(" ") : String(result),
+      );
+    return result;
   };
   /** @param {Node} node */
   const walk = (node) => {
@@ -366,7 +421,7 @@ export function compileRuntime(
         easing(String(a.interpolation));
       }
       if (c.name === "link" || c.name === "expression") {
-        if (!MODEL.complexTypes[node.type]?.attributes[property])
+        if (!declaredAttribute(node.type, property))
           throw new Error(`unknown driven property ${node.name}.${property}`);
         const deps = dependencies.get(label) ?? new Set();
         dependencies.set(label, deps);

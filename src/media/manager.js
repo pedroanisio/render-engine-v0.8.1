@@ -2,8 +2,21 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { assetPath, digest, sequenceFrames } from "./resolve.js";
-import { decodeImage, probe, VideoDecoder, resizeSurface } from "./decode.js";
+import {
+  assetPath,
+  digest,
+  sequenceFrames,
+  fingerprint,
+  verifiedPath,
+} from "./resolve.js";
+import {
+  decodeImage,
+  probe,
+  VideoDecoder,
+  resizeSurface,
+  inputOptions,
+} from "./decode.js";
+import { frameIndex } from "../eval/frames.js";
 import { timecode } from "../eval/clock.js";
 import { mediaTime, mediaRemap, fpsOf } from "./clock.js";
 import { decodeAudio, audiogramSurface } from "./audio.js";
@@ -39,12 +52,16 @@ export async function prepareMedia(scene, { base, available = false }) {
   /** @type {Map<string,{width:number,height:number}>} */ const dimensions =
     new Map();
   /** @type {Map<string,number>} */ const durations = new Map();
-  /** @param {Node} node @param {string} src @param {string} [hash] */
-  function read(node, src, hash) {
-    const bytes = readFileSync(assetPath(base, src)),
-      sha256 = digest(bytes);
-    if (hash && sha256.toLowerCase() !== hash.toLowerCase())
+  /** Identity of each verified source, captured on the descriptor that hashed it.
+   * @type {Map<string,string>} */ const identities = new Map();
+  /** Hash `src` (streamed; bytes kept only when `keep`), check it against the
+   * declared hash and record it as a dependency of `node`.
+   * @param {Node} node @param {string} src @param {string} [hash] @param {boolean} [keep] */
+  function verify(node, src, hash, keep = false) {
+    const { sha256, identity, bytes } = fingerprint(assetPath(base, src), keep);
+    if (hash && sha256 !== hash.toLowerCase())
       throw new Error(`${src}: SHA-256 mismatch`);
+    identities.set(src, identity);
     const id = String(node.attributes.id ?? node.path);
     let list = dependencies.get(id);
     if (!list) {
@@ -52,8 +69,20 @@ export async function prepareMedia(scene, { base, available = false }) {
       dependencies.set(id, list);
     }
     if (!list.some((d) => d.src === src)) list.push({ src, sha256 });
-    return bytes;
+    return { bytes: /** @type {Buffer} */ (bytes), sha256 };
   }
+  /** The verified bytes of `src`: decoders read these, never the file again.
+   * @param {Node} node @param {string} src @param {string} [hash] */
+  const read = (node, src, hash) => verify(node, src, hash, true).bytes;
+  /** A guard for path-based (subprocess) decoders of a verified source: throws
+   * when it escapes the scene or changed since hashing. @param {string} src */
+  const unchanged = (src) => {
+    const identity = identities.get(src);
+    if (identity === undefined) throw new Error(`${src}: not verified`);
+    return () => {
+      verifiedPath(base, src, identity);
+    };
+  };
   /** @param {Record<string,any>} a @param {Record<string,any>} actual @param {string[]} keys */
   function metadata(a, actual, keys) {
     for (const key of keys) {
@@ -100,14 +129,17 @@ export async function prepareMedia(scene, { base, available = false }) {
         !existsSync(assetPath(base, src, true))
       )
         continue;
-      const bytes =
-        src && node.name !== "imageSequence"
-          ? read(
-              node,
-              src,
-              a.sha256 === undefined ? undefined : String(a.sha256),
-            )
-          : undefined;
+      // Video and audio are hashed as a stream and never held in memory.
+      const streamed = node.name === "video" || node.name === "audio",
+        bytes =
+          src && node.name !== "imageSequence"
+            ? verify(
+                node,
+                src,
+                a.sha256 === undefined ? undefined : String(a.sha256),
+                !streamed,
+              ).bytes
+            : undefined;
       const staticSurface = (/** @type {Surface} */ surface) =>
         samplers.set(id, (_a, _t, s) =>
           resizeSurface(
@@ -149,6 +181,7 @@ export async function prepareMedia(scene, { base, available = false }) {
             width: result.metadata.width,
             height: result.metadata.height,
           },
+          () => assetPath(base, src),
         );
         samplers.set(id, (_a, _t, s, host) => {
           const cacheKey = "media:" + id + ":" + s,
@@ -167,8 +200,11 @@ export async function prepareMedia(scene, { base, available = false }) {
           return surface;
         });
       } else if (node.name === "video" || node.name === "audio") {
-        const info = probe(assetPath(base, src)),
-          stream = info.streams.find(
+        const check = unchanged(src);
+        check();
+        const info = probe(assetPath(base, src));
+        check();
+        const stream = info.streams.find(
             (/** @type {any} */ s) =>
               s.codec_type === (node.name === "video" ? "video" : "audio"),
           );
@@ -257,7 +293,7 @@ export async function prepareMedia(scene, { base, available = false }) {
             )[Number(a.audioStream ?? 0)]
           )
             throw new Error(`${src}: missing selected audio stream`);
-          const decoder = new VideoDecoder(assetPath(base, src), a);
+          const decoder = new VideoDecoder(assetPath(base, src), a, check);
           samplers.set(id, (_a, t, s, _host, layer) =>
             decoder.frame(
               t,
@@ -277,6 +313,7 @@ export async function prepareMedia(scene, { base, available = false }) {
             "-v",
             "error",
             "-xerror",
+            ...inputOptions(),
             "-i",
             assetPath(base, src),
             "-f",
@@ -285,6 +322,7 @@ export async function prepareMedia(scene, { base, available = false }) {
           ],
           { maxBuffer: 4 << 20 },
         );
+        check();
       } else if (node.name === "imageSequence") {
         const files = sequenceFrames(a),
           cache = new SequenceCache(a);
@@ -310,12 +348,15 @@ export async function prepareMedia(scene, { base, available = false }) {
                 : blank,
             );
           } else {
-            const decoded = await decodeImage(read(node, file), a, 1, path);
+            const bytes = read(node, file),
+              decoded = await decodeImage(bytes, a, 1, path);
             metadata(a, decoded.metadata, ["width", "height"]);
             previous = cache.add(
               path,
-              digest(readFileSync(path)),
+              digest(bytes),
               decoded.surface,
+              a,
+              () => assetPath(base, file),
             );
             frames.push(previous);
           }
@@ -326,13 +367,13 @@ export async function prepareMedia(scene, { base, available = false }) {
               JSON.stringify(dependencies.get(id) ?? []),
             ),
           );
-          if (actual !== a.sha256)
+          if (actual !== String(a.sha256).toLowerCase())
             throw new Error(`${id}: sequence manifest SHA-256 mismatch`);
         }
         samplers.set(id, (_a, t, s) => {
           const frame =
             frames[
-              Math.min(frames.length - 1, Math.floor(t * fpsOf(a.fps).value))
+              Math.min(frames.length - 1, frameIndex(t, fpsOf(a.fps).value))
             ];
           return resizeSurface(
             typeof frame === "string"
@@ -421,6 +462,7 @@ export async function prepareMedia(scene, { base, available = false }) {
             (p) => read(node, p),
             assetPath(base, src),
             a.format === undefined ? undefined : String(a.format),
+            unchanged(src),
           ),
         );
       }
@@ -435,9 +477,21 @@ export async function prepareMedia(scene, { base, available = false }) {
             (n) => n.attributes.id === (track?.attributes.asset ?? source),
           );
         if (!asset) throw new Error(`unknown audiogram source ${source}`);
+        const src = String(asset.attributes.src);
+        if (!identities.has(src))
+          verify(
+            asset,
+            src,
+            asset.attributes.sha256 === undefined
+              ? undefined
+              : String(asset.attributes.sha256),
+          );
         const pcm = decodeAudio(
-          assetPath(base, String(asset.attributes.src)),
+          assetPath(base, src),
           Number(asset.attributes.audioStream ?? 0),
+          1,
+          48000,
+          unchanged(src),
         );
         samplers.set(String(node.attributes.id), (a, t, s, host) => {
           const placed = track

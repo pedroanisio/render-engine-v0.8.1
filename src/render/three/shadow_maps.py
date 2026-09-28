@@ -21,10 +21,20 @@ def tree(objects, deps):
     return BVHTree.FromPolygons(vertices,faces),vertices
 
 
-def camera_ray(camera,x,y,width,height):
-    u=(x+.5)/width;v=(y+.5)/height;data=camera.data;rotation=camera.matrix_world.to_quaternion()
+def camera_rays(camera,width,height):
+    """Per-pixel ray function with the camera invariants (pose, frustum) hoisted."""
+    data=camera.data;rotation=camera.matrix_world.to_quaternion();translation=camera.matrix_world.translation.copy()
+    frame=None
+    if data.type not in ('ORTHO','PANO'):
+        view=data.view_frame(scene=__import__('bpy').context.scene);frame=(max(p.x/-p.z for p in view),max(p.y/-p.z for p in view))
+    return lambda x,y:camera_ray(camera,x,y,width,height,(data,rotation,translation,frame))
+
+
+def camera_ray(camera,x,y,width,height,hoisted=None):
+    u=(x+.5)/width;v=(y+.5)/height
+    data,rotation,translation,frame=hoisted or (camera.data,camera.matrix_world.to_quaternion(),camera.matrix_world.translation,None)
     if data.type=='ORTHO':
-        return camera.matrix_world.translation+rotation@Vector(((u-.5)*data.ortho_scale,(.5-v)*data.ortho_scale*height/width,0)),rotation@Vector((0,0,-1))
+        return translation+rotation@Vector(((u-.5)*data.ortho_scale,(.5-v)*data.ortho_scale*height/width,0)),rotation@Vector((0,0,-1))
     if data.type=='PANO':
         if data.panorama_type=='EQUIRECTANGULAR':
             phi=(u-.5)*2*math.pi;theta=(.5-v)*math.pi;d=Vector((math.sin(phi)*math.cos(theta),math.sin(theta),-math.cos(phi)*math.cos(theta)))
@@ -34,9 +44,10 @@ def camera_ray(camera,x,y,width,height):
             if r>1:return None,None
             theta=r*math.pi/2;d=Vector((math.sin(theta)*px/(r or 1),math.sin(theta)*py/(r or 1),-math.cos(theta)))
     else:
-        frame=data.view_frame(scene=__import__('bpy').context.scene);right=max(p.x/-p.z for p in frame);top=max(p.y/-p.z for p in frame)
-        d=Vector(((2*u-1)*right,(1-2*v)*top,-1))
-    return camera.matrix_world.translation,rotation@d.normalized()
+        if frame is None:
+            view=data.view_frame(scene=__import__('bpy').context.scene);frame=(max(p.x/-p.z for p in view),max(p.y/-p.z for p in view))
+        right,top=frame;d=Vector(((2*u-1)*right,(1-2*v)*top,-1))
+    return translation,rotation@d.normalized()
 
 
 class ShadowMaps:
@@ -113,17 +124,20 @@ class ShadowMaps:
         return transmittance
 
     def mask(self,camera,width,height,lamp,spec):
-        result=np.ones((height,width,1),np.float32)
+        # Rays go through mathutils BVH queries one at a time, which numpy cannot
+        # batch; the per-pixel loop keeps only the ray casts and depth lookups.
+        result=np.ones((height,width,1),np.float32);ray=camera_rays(camera,width,height)
+        softness=float(spec.get('shadowSoftness',0));radius=max(1,round(softness*self.unit*int(spec.get('shadowMapSize',2048))/self.extent))
+        offsets=[(0,0)] if softness==0 else [(dx*radius,dy*radius) for dx in (-1,0,1) for dy in (-1,0,1)]
+        receives={ob.name:self.specs.get(ob.name,{}).get('receiveShadow',True) for ob,_ in self.primary}
         for y in range(height):
             for x in range(width):
-                origin,direction=camera_ray(camera,x,y,width,height)
+                origin,direction=ray(x,y)
                 if origin is None:continue
                 best=math.inf;point=None;receiver=None;normal=None
                 for ob,bvh in self.primary:
                     hit=bvh.ray_cast(origin,direction)
                     if hit[0] is not None and hit[3]<best:point=hit[0];receiver=ob;best=hit[3];normal=hit[1]
-                if point is not None and self.specs.get(receiver.name,{}).get('receiveShadow',True):
-                    softness=float(spec.get('shadowSoftness',0));radius=max(1,round(softness*self.unit*int(spec.get('shadowMapSize',2048))/self.extent))
-                    offsets=[(0,0)] if softness==0 else [(dx*radius,dy*radius) for dx in (-1,0,1) for dy in (-1,0,1)]
+                if point is not None and receives[receiver.name]:
                     result[y,x,0]=sum(self.visibility(lamp,spec,point,normal,o) for o in offsets)/len(offsets)
         return result

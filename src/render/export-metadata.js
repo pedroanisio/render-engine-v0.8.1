@@ -1,4 +1,5 @@
 import { writeFileSync } from "node:fs";
+import { timecode } from "../eval/clock.js";
 /** @typedef {import('../xsd/validate.js').ValidNode} Node */
 /** @param {string} s */
 const escape = (s) => s.replace(/[\\=;#\n]/g, (c) => "\\" + c);
@@ -25,7 +26,9 @@ export function metadataFile(scene, start, end, file) {
   const markers = (
     scene.children.find((n) => n.name === "markers")?.children ?? []
   )
-    .filter((n) => n.name === "marker")
+    // Only chapter markers are chapters (schema default kind is "cue"); an open
+    // chapter runs to the next chapter marker, not to the next cue/beat/comment.
+    .filter((n) => n.name === "marker" && n.attributes.kind === "chapter")
     .sort((a, b) => Number(a.attributes.time) - Number(b.attributes.time));
   markers.forEach((n, i) => {
     const t = Number(n.attributes.time),
@@ -46,19 +49,37 @@ export function metadataFile(scene, start, end, file) {
   return file;
 }
 
-/** Non-drop-frame timecode rebased for an export range. @param {string} code @param {number} seconds @param {number} fps */
+/** SMPTE timecode rebased for an export range. `HH:MM:SS:FF` is non-drop-frame;
+ * `HH:MM:SS;FF` is drop-frame (29.97/59.94) and keeps its `;` separator.
+ * @param {string} code @param {number} seconds @param {number} fps */
 export function offsetTimecode(code, seconds, fps) {
-  const [hh, mm, ss, ff] = code.split(":").map(Number),
-    nominal = Math.round(fps);
+  const m = /^\d+:[0-5]\d:[0-5]\d([:;])\d+$/.exec(code);
+  if (!m) throw new Error(`invalid timecode ${code}`);
+  const dropFrame = m[1] === ";",
+    nominal = Math.round(fps),
+    drop = nominal / 15;
+  // timecode() validates frame labels and removes dropped labels for DF.
   let frames =
-    (Number(hh) * 3600 + Number(mm) * 60 + Number(ss)) * nominal +
-    Number(ff) +
-    Math.round(seconds * fps);
+    Math.round(timecode(code, fps) * fps) + Math.round(seconds * fps);
+  if (frames < 0) throw new Error(`timecode ${code} offset is negative`);
+  if (dropFrame) {
+    const perMinute = nominal * 60 - drop,
+      perTen = perMinute * 10 + drop,
+      tens = Math.floor(frames / perTen),
+      rest = frames % perTen;
+    frames +=
+      drop * 9 * tens +
+      (rest > drop ? drop * Math.floor((rest - drop) / perMinute) : 0);
+  }
   const f = frames % nominal;
   frames = Math.floor(frames / nominal);
   const s = frames % 60;
   frames = Math.floor(frames / 60);
-  const m = frames % 60;
+  const mm = frames % 60;
   const h = Math.floor(frames / 60);
-  return [h, m, s, f].map((n) => String(n).padStart(2, "0")).join(":");
+  return (
+    [h, mm, s].map((n) => String(n).padStart(2, "0")).join(":") +
+    (dropFrame ? ";" : ":") +
+    String(f).padStart(2, "0")
+  );
 }

@@ -1,6 +1,24 @@
 /** Field accelerations in scene units per second squared, evaluated at a fixed step. */
 import { svgPathProperties } from "svg-path-properties";
 import { noise } from "../fx/spatial.js";
+/** @type {Map<string,{x:number,y:number}[]>} */ const samples = new Map();
+/** 129 arc-length samples of an attractor path, parsed once per path string.
+ * @param {string} d */
+function pathSamples(d) {
+  let points = samples.get(d);
+  if (!points) {
+    const path = new svgPathProperties(d),
+      total = path.getTotalLength();
+    points = [];
+    for (let i = 0; i <= 128; i++) {
+      const p = path.getPointAtLength((total * i) / 128);
+      points.push({ x: p.x, y: p.y });
+    }
+    if (samples.size >= 64) samples.clear();
+    samples.set(d, points);
+  }
+  return points;
+}
 /** @param {Record<string,any>} a @param {number} x @param {number} y @param {number} vx @param {number} vy @param {number} t @returns {[number,number]} */
 export function field(a, x, y, vx, vy, t) {
   if (t < Number(a.start ?? 0) || t >= Number(a.end ?? Infinity)) return [0, 0];
@@ -34,14 +52,11 @@ export function field(a, x, y, vx, vy, t) {
         k * (2 * noise(x / scale, y / scale + t, Number(a.seed ?? 0) + 1) - 1),
       ];
     case "attractor-path": {
-      const path = new svgPathProperties(String(a.path)),
-        total = path.getTotalLength();
       let bx = 0,
         by = 0,
         best = Infinity;
-      for (let i = 0; i <= 128; i++) {
-        const p = path.getPointAtLength((total * i) / 128),
-          d = (p.x - dx) ** 2 + (p.y - dy) ** 2;
+      for (const p of pathSamples(String(a.path))) {
+        const d = (p.x - dx) ** 2 + (p.y - dy) ** 2;
         if (d < best) {
           best = d;
           bx = p.x - dx;

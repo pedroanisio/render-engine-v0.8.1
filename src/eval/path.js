@@ -57,29 +57,48 @@ export function parameterPoint(path, u) {
   return { x: c * px - sn * py + (s.x + e.x) / 2, y: sn * px + c * py + (s.y + e.y) / 2 };
 }
 
-/** Canonicalize zero-radius arcs to lines (SVG's specified degenerate case). @param {string} source */
+/** Canonicalize zero-radius arcs to lines (SVG's specified degenerate case).
+ * Arc flags are single characters, so compact forms like `a5 5 0 0110 10` parse. @param {string} source */
 export function motionPath(source) {
-  const pattern = /[a-df-zA-DF-Z]|[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?/g;
-  if (source.replace(pattern, '').replace(/[\s,]/g, '')) throw new Error('invalid SVG path text');
-  const tokens = source.match(/[a-df-zA-DF-Z]|[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?/g) ?? [];
+  const number = /[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?/y;
   const arity = { M: 2, L: 2, H: 1, V: 1, C: 6, S: 4, Q: 4, T: 2, A: 7, Z: 0 };
   const out = [];
   let command = '',
     i = 0;
-  while (i < tokens.length) {
-    if (/^[a-z]$/i.test(String(tokens[i]))) command = String(tokens[i++]);
-    const n = /** @type {Record<string,number>} */ (arity)[command.toUpperCase()];
+  const skip = () => {
+    while (i < source.length && /[\s,]/.test(String(source[i]))) i++;
+  };
+  /** @param {boolean} flag */
+  const read = (flag) => {
+    skip();
+    if (flag && (source[i] === '0' || source[i] === '1')) return String(source[i++]);
+    number.lastIndex = i;
+    const m = flag ? null : number.exec(source);
+    if (m) {
+      i = number.lastIndex;
+      return m[0];
+    }
+    if (i < source.length && !/[-+.\da-df-zA-DF-Z]/.test(String(source[i])))
+      throw new Error('invalid SVG path text');
+    throw new Error('invalid SVG path arguments');
+  };
+  skip();
+  while (i < source.length) {
+    if (/[a-df-zA-DF-Z]/.test(String(source[i]))) command = String(source[i++]);
+    else if (!command && !/[-+.\d]/.test(String(source[i]))) throw new Error('invalid SVG path text');
+    const upper = command.toUpperCase(),
+      n = /** @type {Record<string,number>} */ (arity)[upper];
     if (n === undefined) throw new Error('invalid SVG path command');
     if (n === 0) {
       out.push(command);
       command = '';
+      skip();
       continue;
     }
-    const args = tokens.slice(i, i + n);
-    if (args.length !== n || args.some((x) => !Number.isFinite(Number(x))))
-      throw new Error('invalid SVG path arguments');
-    i += n;
-    if (command.toUpperCase() === 'A' && (Number(args[0]) === 0 || Number(args[1]) === 0))
+    const args = Array.from({ length: n }, (_, j) => read(upper === 'A' && (j === 3 || j === 4)));
+    if (args.some((x) => !Number.isFinite(Number(x)))) throw new Error('invalid SVG path arguments');
+    skip();
+    if (upper === 'A' && (Number(args[0]) === 0 || Number(args[1]) === 0))
       out.push(command === 'A' ? 'L' : 'l', ...args.slice(5));
     else out.push(command, ...args);
     if (command === 'M') command = 'L';

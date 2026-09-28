@@ -306,7 +306,12 @@ export function effect(input, node, rate, channels, control, sidechain) {
             : slope * Math.max(0, over),
         );
       }
-      const smooth = smoothing(target < reduction ? attack : release);
+      // Compressors attack as gain falls; a gate attacks as it opens (gain rises).
+      const smooth = smoothing(
+        (type === "gate" ? target > reduction : target < reduction)
+          ? attack
+          : release,
+      );
       reduction = smooth * reduction + (1 - smooth) * target;
       for (let c = 0; c < channels; c++) {
         const x = Number(input[offset + c]);

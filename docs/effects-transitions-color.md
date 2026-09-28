@@ -71,7 +71,7 @@ the XSD; explicitly set controls for a desired look.
 | `halation` | Bright-pass scatter with a red-biased response, distinct from white bloom. |
 | `drop-shadow`, `inner-shadow`, `inner-glow` | Blurred coverage or its interior complement; colour, radius, intensity, offsets, original placement. Inner glow is unshifted. |
 | `long-shadow` | Maximum-coverage extrusion along `offsetX/Y`, sampled over its full length; colour and original placement. |
-| `stroke`, `outline` | Disk morphology coverage difference; radius and inside/centre/outside `position`. Stroke also retains the original; outline emits the edge. |
+| `stroke`, `outline` | Disk morphology coverage difference; radius and inside/centre/outside `position`. Stroke also retains the original; outline emits the edge. Newly covered pixels take the covering neighbour's colour; radii beyond the image diagonal are equivalent to it. |
 | `matte-choke` | Alpha erosion for positive `amount`, dilation for negative amount. |
 | `sharpen` | Four-neighbour Laplacian detail gain by `amount`. |
 | `unsharp-mask` | Gaussian low-frequency subtraction, `radius`, `amount`, detail `threshold`. |
@@ -181,7 +181,10 @@ CDL operations, look mix, and the display tone transform are applied explicitly.
 view bypasses tone mapping; `standard` applies the selected tone mapper.
 AgX and Filmic use the pinned Blender 4.5 reference data, while ACES 2 uses
 OpenColorIO's built-in ACES 2.0 SDR 100-nit transform. Output colourSpace and
-transfer drive RGB encoding. Additional HDR containers, bit depths and
+transfer drive RGB encoding. The container transfer tag names the curve actually
+applied (with `transfer="auto"`: linear for linear-srgb/ACEScg/ACES2065-1/
+XYZ-D65/raw, BT.709 for rec709, sRGB otherwise); gamma 2.6 (dci-p3), ACEScct
+and camera-log encodings have no matching standard tag and are left untagged. Additional HDR containers, bit depths and
 metadata are export work in Batch 7.
 
 With `ocioConfig`, actual OCIO colourspace/look/display/view processors run.

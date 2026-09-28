@@ -76,10 +76,10 @@ export function createSemanticChecker(model, simple) {
 
     /** @param {ValidNode} node */
     const walk = (node) => {
-      const def = model.complexTypes[node.type];
+      const def = Object.hasOwn(model.complexTypes, node.type) ? model.complexTypes[node.type] : undefined;
       if (def) {
         for (const [attr, value] of Object.entries(node.attributes)) {
-          const ad = def.attributes[attr];
+          const ad = Object.hasOwn(def.attributes, attr) ? def.attributes[attr] : undefined;
           if (ad) visitValue(node, attr, value, flagsOf(ad.type));
         }
       }

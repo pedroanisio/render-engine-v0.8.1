@@ -46,7 +46,7 @@ export function loadScene(source, options = {}) {
   const v = validator.validate(parsed.root, {
     maxDiagnostics: options.maxDiagnostics,
   });
-  if (v.diagnostics.length) return { ok: false, diagnostics: v.diagnostics };
+  if (!v.valid || v.diagnostics.length) return { ok: false, diagnostics: v.diagnostics };
   const s = semantic(v.tree);
   if (s.length) return { ok: false, diagnostics: s };
   return { ok: true, scene: v.tree, ids: v.ids };

@@ -10,7 +10,9 @@ export function shutter(t, fps, p, sample) {
     phase = Number(p.shutterPhase ?? -90),
     width = angle / 360 / fps,
     start = t + phase / 360 / fps;
-  if (!width || count === 1) return sample(t);
+  if (!width) return sample(t);
+  // One sample sits at the shutter window's centre, like the midpoints of count>=2.
+  if (count === 1) return sample(start + width / 2);
   const integrate = (/** @type {number} */ n) => {
     let out;
     for (let j = 0; j < n; j++) {

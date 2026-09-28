@@ -182,7 +182,10 @@ never silently overwritten during rendering.
 All ten particle presets and six emitter shapes are supported, including sprite
 atlases, rate/bursts, preroll, lifetime/velocity/size/rotation variance, curves,
 fields, drag, turbulence, gravity, collision/bounce, colour, opacity, blending
-and effects. Random streams depend on seed, birth ID and property lane. Particle
+and effects. Random streams depend on seed, birth ID and property lane. Burst
+particles take IDs from a separate range fixed by burst order, repeat and index,
+so they keep their random streams as continuous births accrue; asset-alpha
+rejection sampling uses its own lanes. Particle
 simulation is evaluated from birth, so seek order is independent. Maximum
 budgets: 100,000 particles, 200,000 births, 600 seconds and four million integration
 steps per sample. Burst allocations enforce the same birth budget. When
@@ -194,15 +197,24 @@ advancement samples historical fixed-step poses, transfers translational and
 angular collider velocity, and avoids tunnelling through thin walls. Sensors
 are excluded and activation times apply. Animated emitter transforms, field
 vectors and composition clocks are converted consistently between local and
-world coordinates. A render followed by a backward seek reproduces its pixels.
+world coordinates. The emitter's world transform is measured on a 1/120 s grid
+and reused across a grid cell whose two ends agree (exact for static and
+piecewise-static transforms); otherwise each integration instant is measured.
+A render followed by a backward seek reproduces its pixels.
+
+Kinematic bodies turn the short way toward their animated angle, so rotation
+crossing ±180° stays continuous. Joint `breakForce` compares the reaction force
+of the last solver substep, which is independent of the substep count.
 
 ## Tracking and 360
 
 Tracking reads JSON, CSV, Nuke .chan, After Effects, Mocha corner-pin and binary or
 ASCII FBX. Time offsets and hashes are enforced. Named point collections support
 point, planar, face and mask landmark attachment. FBX retains source timestamps
-and resamples at project FPS. Stabilization uses footage clip/speed/remap time
-and a symmetric 17-sample smoothing window.
+and resamples at project FPS, with Euler angles kept continuous from frame to
+frame rather than wrapping at ±180°. Stabilization uses footage clip/speed/remap
+time and a symmetric 17-sample smoothing window; rotation is averaged as offsets
+wrapped to ±180° from the current angle.
 
 Panorama layouts are equirectangular, cubemap, equiangular cubemap and fisheye 180.
 Stereo is mono, top-bottom or left-right, with IPD in metres. Cube atlases use six

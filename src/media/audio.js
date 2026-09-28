@@ -10,17 +10,27 @@ import { join } from "node:path";
 import { createCanvas } from "@napi-rs/canvas";
 import { canvasPaint } from "./canvas-paint.js";
 import { rgbaSurface } from "./color.js";
-import { assetPath } from "./resolve.js";
+import { assetPath, fingerprint, verifiedPath } from "./resolve.js";
+import { inputOptions } from "./decode.js";
 import { mediaTime, mediaRemap } from "./clock.js";
 /** @typedef {import('../xsd/validate.js').ValidNode} Node */
-/** @param {string} path @param {number} [stream] @param {number} [channels] @param {number} [rate] */
-export function decodeAudio(path, stream = 0, channels = 1, rate = 48000) {
+/** `check` runs before and after decoding and throws when the source changed.
+ * @param {string} path @param {number} [stream] @param {number} [channels] @param {number} [rate] @param {()=>void} [check] */
+export function decodeAudio(
+  path,
+  stream = 0,
+  channels = 1,
+  rate = 48000,
+  check = () => {},
+) {
+  check();
   const raw = execFileSync(
     "ffmpeg",
     [
       "-v",
       "error",
       "-xerror",
+      ...inputOptions(),
       "-i",
       path,
       "-map",
@@ -37,6 +47,7 @@ export function decodeAudio(path, stream = 0, channels = 1, rate = 48000) {
     ],
     { maxBuffer: 1 << 30 },
   );
+  check();
   const pcm = new Float32Array(raw.length / 4);
   for (let i = 0; i < pcm.length; i++) pcm[i] = raw.readFloatLE(i * 4);
   return pcm;
@@ -167,6 +178,25 @@ export function videoAudio(scene, runtime, base, work) {
   /** @type {Map<string,string>} */ const paths = new Map();
   /** @type {Node[]} */ const tracks = [];
   const duration = runtime.timeline.duration;
+  /** Decode the audio of a verified source: a declared hash is re-checked here
+   * and the file must stay unchanged while FFmpeg reads it. @param {Node} asset */
+  function bake(asset) {
+    const src = String(asset.attributes.src),
+      path = assetPath(base, src),
+      { sha256, identity } = fingerprint(path);
+    if (
+      asset.attributes.sha256 !== undefined &&
+      sha256 !== String(asset.attributes.sha256).toLowerCase()
+    )
+      throw new Error(`${src}: SHA-256 mismatch`);
+    return decodeAudio(
+      path,
+      Number(asset.attributes.audioStream ?? 0),
+      channels,
+      rate,
+      () => verifiedPath(base, src, identity),
+    );
+  }
   /** @param {Node} n @param {Node[]} parents */
   function walk(n, parents) {
     if (n.name === "layer") {
@@ -174,13 +204,7 @@ export function videoAudio(scene, runtime, base, work) {
       if (asset?.name === "video" && asset.attributes.hasAudio === true) {
         const id = String(asset.attributes.id),
           pcm =
-            decoded.get(id) ??
-            decodeAudio(
-              assetPath(base, String(asset.attributes.src)),
-              Number(asset.attributes.audioStream ?? 0),
-              channels,
-              rate,
-            );
+            decoded.get(id) ?? bake(asset);
         decoded.set(id, pcm);
         const remap = mediaRemap(scene, n),
           samples = Math.ceil(duration * rate),

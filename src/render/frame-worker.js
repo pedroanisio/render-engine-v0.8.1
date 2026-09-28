@@ -14,6 +14,7 @@ const message = (error) =>
 try {
   const { renderer, oa, plan, media } = await createRenderer(
     workerData.options,
+    workerData.snapshot,
   );
   const floatFrames = plan.codec === "exr-sequence";
   port.on("message", (m) => {

@@ -1,5 +1,6 @@
 /** Output planning: explicit codec/container compatibility, no encoder fallback. */
 import { execFileSync } from "node:child_process";
+import { transferOf } from "./color-management.js";
 /** @typedef {Record<string, import('../xsd/validate.js').ValidNode['attributes'][string]>} Attrs */
 export const codecs =
   /** @type {Record<string,{encoder:string,containers:string[],pixel:string}>} */ ({
@@ -285,6 +286,9 @@ export function colorArguments(a) {
     "display-p3": "smpte432",
     "dci-p3": "smpte431",
   });
+  // Tag the transfer encode16 actually applies. Pure gamma 2.6 (DCI-P3; ST 428-1
+  // adds a 48/52.37 scale), ACEScc/cct and camera logs have no H.273 value, so
+  // they stay untagged rather than claiming sRGB.
   const trc = /** @type {Record<string,string>} */ ({
     srgb: "iec61966-2-1",
     linear: "linear",
@@ -297,14 +301,7 @@ export function colorArguments(a) {
     transfer = String(a.transfer ?? "auto");
   const args = ["-color_range", a.colorRange === "full" ? "pc" : "tv"];
   if (prim[space]) args.push("-color_primaries", prim[space]);
-  const t =
-    transfer === "auto"
-      ? space === "linear-srgb"
-        ? "linear"
-        : space === "rec709"
-          ? "bt709"
-          : "iec61966-2-1"
-      : trc[transfer];
+  const t = trc[transfer === "auto" ? transferOf(space) : transfer];
   if (t) args.push("-color_trc", t);
   args.push("-colorspace", space === "rec2020" ? "bt2020nc" : "bt709");
   return args;

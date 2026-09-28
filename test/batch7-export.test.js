@@ -47,7 +47,7 @@ function scene(name, attrs, children = "", project = "") {
   const file = join(dir, name + ".xml");
   writeFileSync(
     file,
-    `<scene version="1.1"><project width="64" height="48" fps="4" duration="1" background="#00000000" ${project}/><metadata title="Codec fixture" author="Test"><meta name="custom" value="A=B;C#D"/></metadata><output id="main" path="${name}" ${attrs}>${children}</output><markers><marker id="chapter" time="0.25" label="Chapter"/></markers><composition><shape id="box" shape="rect" width="20" height="20" fill="#FF000080"><animate property="x"><key time="0" value="0"/><key time="1" value="40"/></animate></shape></composition></scene>`,
+    `<scene version="1.1"><project width="64" height="48" fps="4" duration="1" background="#00000000" ${project}/><metadata title="Codec fixture" author="Test"><meta name="custom" value="A=B;C#D"/></metadata><output id="main" path="${name}" ${attrs}>${children}</output><markers><marker id="chapter" time="0.25" kind="chapter" label="Chapter"/></markers><composition><shape id="box" shape="rect" width="20" height="20" fill="#FF000080"><animate property="x"><key time="0" value="0"/><key time="1" value="40"/></animate></shape></composition></scene>`,
   );
   return file;
 }

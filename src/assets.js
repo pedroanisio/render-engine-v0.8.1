@@ -128,7 +128,9 @@ export function sniff(b) {
     let fmt = null;
     for (let at = 12; at + 8 <= b.length;) {
       const size = v.getUint32(at + 4, true);
-      if (ascii(b, at, 'fmt ') && at + 24 <= b.length) {
+      if (ascii(b, at, 'fmt ')) {
+        // A PCM fmt chunk carries at least 16 bytes; anything shorter is corrupt.
+        if (size < 16 || at + 24 > b.length) break;
         fmt = {
           channels: v.getUint16(at + 10, true),
           sampleRate: v.getUint32(at + 12, true),
@@ -142,13 +144,17 @@ export function sniff(b) {
         fmt.sampleRate
       ) {
         const { channels, sampleRate, bitsPerSample, blockAlign } = fmt;
+        // Streaming writers leave the size 0 or 0xFFFFFFFF, and truncated
+        // files declare more than they hold: measure what is actually there.
+        const available = b.length - (at + 8);
+        const bytes = size === 0 || size === 0xffffffff || size > available ? available : size;
         return {
           format: 'wav',
           family: 'audio',
           channels,
           sampleRate,
           bitsPerSample,
-          duration: size / blockAlign / sampleRate,
+          duration: Math.floor(bytes / blockAlign) / sampleRate,
         };
       }
       at += 8 + size + (size & 1);

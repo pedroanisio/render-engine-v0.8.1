@@ -1,7 +1,17 @@
 import { extname, dirname, posix, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-/** @param {string} src @param {Uint8Array} bytes @param {(src:string)=>Uint8Array} read @param {string} [absolute] @param {string} [format] */
-export async function importMesh(src, bytes, read, absolute, format) {
+import { statSync } from 'node:fs';
+/** `check` throws when the verified source changed; it guards the USD importer,
+ * which reads the file itself.
+ * @param {string} src @param {Uint8Array} bytes @param {(src:string)=>Uint8Array} read @param {string} [absolute] @param {string} [format] @param {()=>void} [check] */
+export async function importMesh(
+  src,
+  bytes,
+  read,
+  absolute,
+  format,
+  check = () => {},
+) {
   const ext = format ? '.' + format : extname(src).toLowerCase();
   if (ext === '.splat') {
     if (bytes.byteLength % 32) throw new Error('truncated splat');
@@ -21,18 +31,27 @@ export async function importMesh(src, bytes, read, absolute, format) {
   if (['.usd', '.usda', '.usdc', '.usdz'].includes(ext)) {
     if (!absolute)
       throw new Error('USD import requires a resolved source path');
+    // The scene root is as many levels above the source as the normalized
+    // relative src has segments ('./a.usda' and 'a//b.usda' included).
+    const segments = posix.normalize(src).split('/').filter(Boolean),
+      root = resolve(absolute, ...segments.map(() => '..')),
+      started = Date.now();
+    check();
     const imported = JSON.parse(
       execFileSync(
         process.env.SCENE_RENDER_PYTHON ?? 'python3',
-        [
-          new URL('./usd-import.py', import.meta.url).pathname,
-          absolute,
-          resolve(absolute, ...src.split('/').map(() => '..')),
-        ],
+        [new URL('./usd-import.py', import.meta.url).pathname, absolute, root],
         { encoding: 'utf8', maxBuffer: 256 << 20 },
       ),
     );
-    for (const dep of imported.dependencies) read(dep);
+    check();
+    // Dependencies are hashed after the import: any change since it started
+    // (ctime moves on every write, rename or relink) fails the import.
+    for (const dep of imported.dependencies) {
+      read(dep);
+      if (Math.floor(statSync(resolve(root, dep)).ctimeMs) > started)
+        throw new Error(`USD dependency changed during import: ${dep}`);
+    }
     return imported;
   }
   const factory = (await import('assimpjs')).default,

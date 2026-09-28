@@ -84,7 +84,15 @@ function shapingLanguage(language) {
 const bidi = bidiFactory();
 /** @typedef {import('../xsd/validate.js').ValidNode} Node */
 /** @typedef {Record<string,any>} Style */
-/** @typedef {{text:string,style:Style,role:string,width:number,line?:number,x?:number,y?:number}} Item */
+/** @typedef {{text:string,style:Style,role:string,width:number,line?:number,x?:number,y?:number,word?:number}} Item */
+/** @param {Item} item */
+const blank = (item) => /^\s+$/.test(item.text);
+/** Drop trailing whitespace: it neither counts toward a line's width nor renders.
+ * @param {Item[]} line */
+const trimEnd = (line) => {
+  while (line.length && blank(/** @type {Item} */ (line.at(-1)))) line.pop();
+  return line;
+};
 /** Explicit XML attributes override inherited style; schema defaults do not. @param {Node} n @param {Map<string,Node>} styles @param {Style} [parent] @returns {Style} */
 export function textStyle(n, styles, parent = {}) {
   const id = n.attributes.basedOn ?? n.attributes.style;
@@ -241,7 +249,7 @@ export function createTypography(scene, read, systemFont) {
         size) /
         found.font.unitsPerEm) *
         Number(item.style.stretch ?? 1) +
-      Math.max(0, Array.from(item.text).length) * spacing
+      run.glyphs.length * spacing
     );
   }
   /** @param {Node} asset @param {number} scale @param {Style} [animated] */
@@ -264,6 +272,10 @@ export function createTypography(scene, read, systemFont) {
     /** @param {number} size */
     const build = (size) => {
       /** @type {Item[]} */ const tokens = [];
+      // Words are runs of non-space tokens: hyphenation pieces and adjacent
+      // spans continue a word; whitespace and newlines end it.
+      let words = 0,
+        inWord = false;
       for (const span of source) {
         const s = /** @type {Style} */ ({
             ...textStyle(span, styles, root),
@@ -301,7 +313,7 @@ export function createTypography(scene, read, systemFont) {
               )
             : text.split(/(\n|[ \t]+|\u00ad)/).filter(Boolean);
         for (const text of parts) {
-          const item = {
+          /** @type {Item} */ const item = {
             text,
             style: s,
             role: String(span.attributes.role ?? ""),
@@ -309,6 +321,12 @@ export function createTypography(scene, read, systemFont) {
           };
           item.width =
             text === "\n" || text === "\u00ad" ? 0 : measure(item, asset);
+          if (text === "\n" || /^\s+$/.test(text)) inWord = false;
+          else if (text !== "\u00ad" && !inWord) {
+            words++;
+            inWord = true;
+          }
+          item.word = Math.max(0, words - 1);
           tokens.push(item);
         }
       }
@@ -350,7 +368,9 @@ export function createTypography(scene, read, systemFont) {
         used += item.width;
         soft = false;
       }
+      for (const line of lines) trimEnd(line);
       return {
+        words,
         lines,
         overflow:
           lines.some((l) => l.reduce((n, t) => n + t.width, 0) > width) ||
@@ -392,14 +412,20 @@ export function createTypography(scene, read, systemFont) {
         const last = lines.at(-1);
         if (last) {
           const style = last.at(-1)?.style ?? { ...root, size };
-          const ellipsis = { text: "…", style, role: "", width: 0 };
+          /** @type {Item} */ const ellipsis = {
+            text: "…",
+            style,
+            role: "",
+            width: 0,
+            word: last.at(-1)?.word,
+          };
           ellipsis.width = measure(ellipsis, asset);
           while (
             last.length &&
             last.reduce((n, t) => n + t.width, 0) + ellipsis.width > width
           )
             last.pop();
-          last.push(ellipsis);
+          trimEnd(last).push(ellipsis);
         }
       }
     }
@@ -409,7 +435,10 @@ export function createTypography(scene, read, systemFont) {
           ? (height - blockHeight) / 2
           : root.verticalAlign === "bottom"
             ? height - blockHeight
-            : 0;
+            : 0,
+      // Vertical text is drawn rotated a quarter turn clockwise, which stacks
+      // lines right to left; vertical-lr stacks them in the opposite order.
+      lr = root.writingMode === "vertical-lr";
     lines.forEach((line, li) => {
       const text = line.map((t) => t.text).join(""),
         levels = bidi.getEmbeddingLevels(
@@ -465,12 +494,14 @@ export function createTypography(scene, read, systemFont) {
             : 0;
       for (const item of visual) {
         item.x = x;
-        item.y = top + li * lineHeight + size;
+        item.y = lr
+          ? height - top - (li + 1) * lineHeight + size
+          : top + li * lineHeight + size;
         item.line = li;
         x += item.width;
       }
     });
-    return { root, size, width, height, lines, scale };
+    return { root, size, width, height, lines, scale, words: result.words };
   }
   /** @param {Node} asset @param {number} scale @param {Style} [animated] @param {Node} [layer] @param {import('../render/frame.js').FrameRenderer} [host] @param {Parameters<typeof canvasPaint>[1]} [paintEnv] */
   function render(asset, scale, animated = {}, layer, host, paintEnv) {
@@ -541,8 +572,10 @@ export function createTypography(scene, read, systemFont) {
     ctx.scale(scale, scale);
     ctx.translate(extra, extra);
     if (vertical) {
-      ctx.translate(root.writingMode === "vertical-rl" ? outputWidth : 0, 0);
-      ctx.transform(0, 1, root.writingMode === "vertical-rl" ? -1 : 1, 0, 0, 0);
+      // A rotation (never a reflection): glyphs read top to bottom in both
+      // vertical modes; layout() mirrors the line order for vertical-lr.
+      ctx.translate(outputWidth, 0);
+      ctx.transform(0, 1, -1, 0, 0, 0);
     }
     const paintFill = paintEnv
       ? canvasPaint(ctx, paintEnv, width, height, scale)
@@ -560,8 +593,7 @@ export function createTypography(scene, read, systemFont) {
       all = lines.flat(),
       total = all.reduce((n, t) => n + Array.from(t.text).length, 0),
       roles = [...new Set(all.map((t) => t.role))];
-    let character = 0,
-      word = 0;
+    let character = 0;
     const padding = Number(root.backgroundPadding ?? 0),
       radius = Number(root.backgroundRadius ?? 0);
     /** @param {string} color @param {number} x @param {number} y @param {number} w @param {number} h */
@@ -633,8 +665,8 @@ export function createTypography(scene, read, systemFont) {
               const unit = {
                 index: character,
                 count: total,
-                word,
-                words: all.length,
+                word: Number(item.word ?? 0),
+                words: Math.max(1, data.words),
                 line: Number(item.line),
                 lines: lines.length,
                 span: roles.indexOf(item.role),
@@ -831,7 +863,6 @@ export function createTypography(scene, read, systemFont) {
           ctx.fillRect(x, yy, item.width, Math.max(1, size / 16));
         }
         ctx.restore();
-        word++;
       }
     }
     const surface = rgbaSurface(

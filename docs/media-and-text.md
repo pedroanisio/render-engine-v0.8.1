@@ -25,9 +25,13 @@ It includes an OFL-licensed Inter variable font. Test media are generated locall
 
 Asset URIs are scene-directory-relative paths. Absolute paths, URI schemes and symlinks escaping that directory are rejected, including missing files below an existing symlink. SVG, OBJ/MTL, glTF, Lottie and USD dependencies pass through the same boundary.
 
+Container-level references cannot leave it either. Every FFmpeg/ffprobe input is opened with `-protocol_whitelist file` and a `-format_whitelist` of all local demuxers except those that open other files, devices or streams named inside the input (HLS, DASH, concat/ffconcat, IMF, SDP/RTP/RTSP, lavfi, script demuxers). A playlist saved as `clip.mp4` or `clip.m3u8` is therefore rejected. ImageMagick decodes layered images with an explicit coder chosen from the file signature (`psd:`, `tiff:`, `gif:`, `png:`, `ico:`), never from the file name or content sniffing, so it cannot be steered to SVG/MSVG, text or URL coders.
+
 `--representation NAME` selects that named representation when available. `--representation proxy` selects a proxy if present. Other assets retain their primary source. Selected representation hashes and dimensions replace the source-file expectations; the original logical dimensions remain the layer's layout dimensions. Only selected files are required. Supply dimensions on representations whose pixel size differs from the original.
 
-Declared SHA-256, dimensions, duration, audio channel count and sample rate are checked. Video preparation performs a complete decode to detect errors beyond its first frame. Sequence preparation audits every existing frame. Generated caches require an exact hash match.
+Declared SHA-256, dimensions, duration, audio channel count and sample rate are checked. Video preparation performs a complete decode to detect errors beyond its first frame.
+
+The hashed bytes are the decoded bytes. Video and audio are hashed as a stream (no size limit, never held in memory); the file's identity (device, inode, size, mtime, ctime) is captured on the hashing descriptor, and every later FFmpeg/ffprobe use re-checks containment and identity before and after it runs, failing if the file changed. Images, fonts, SVG, Lottie and meshes are decoded from the verified in-memory bytes; decoders that need a file (EXR, layered images, the FFmpeg image fallback) read a private temporary copy of those bytes. USD imports are guarded the same way, and a USD dependency whose ctime is later than the import start fails the import. Sequence preparation audits every existing frame. Generated caches require an exact hash match.
 
 The output's `VIDEO.assets.json` records asset IDs, selected files and SHA-256 values, license, credit and generated-source provenance. Referenced fonts, secondary files and representations participate in cache invalidation. System-font bytes are recorded too; bundle fonts for reproducibility across machines. Simple image-only shots preserve selective segment invalidation; procedural and indirect dependencies use conservative invalidation.
 
@@ -45,7 +49,7 @@ Source frame times use rational FPS. Random-access decoding, frame caching, pixe
 
 Layers apply `clipIn`, `clipOut`, `speed`, `timeStretch`, `reverse`, `loop`, `freezeAt` and `timeRemap`. `loop="N"` adds N repeats. Playback holds the endpoint after the requested repeats. Negative speed reverses the interval. A time-remap track takes precedence over freeze and the ordinary playback clock. Its keys map layer-local seconds to source seconds.
 
-Frame blending policies are nearest source frame (`none`), linear-light `frame-mix`, and FFmpeg motion-compensated `optical-flow`. The latter uses a 1/1024-second interpolation grid and is more expensive. Endpoint padding supplies the required temporal neighbours.
+Source times map to frames on the snapped frame grid (`29/25` s is frame 29, not 28). A declared duration within tolerance of the stream may name a frame past its end; such requests clamp to the last frame the stream holds. Frame blending policies are nearest source frame (`none`), linear-light `frame-mix`, and FFmpeg motion-compensated `optical-flow`. The latter uses a 1/1024-second interpolation grid and is more expensive. Endpoint padding supplies the required temporal neighbours.
 
 When `hasAudio="true"`, the selected zero-based `audioStream` is sampled onto the same source clock at 48 kHz and routed through `audioBus`. Layer volume and mute apply. Explicit freezes are silent. Reverse and speed changes affect pitch; this is resampling, not pitch-preserving time stretching. Explicit audio tracks can independently select a video's audio stream.
 
@@ -53,13 +57,15 @@ When `hasAudio="true"`, the selected zero-based `audioStream` is sampled onto th
 
 Exactly one `%d`, `%0Nd` or `#` run identifies the frame number. `first`, `last` and positive `step` enumerate frames inclusively. FPS determines their playback duration. Policies are `error`, `hold`, `black` and `transparent`; `hold` requires an earlier existing frame.
 
-Decoded image and sequence caches have bounded memory. Evicted frames are decoded again and their bytes are checked against the preparation hash. Requesting frames in a different order does not change pixels.
+Decoded image and sequence caches have bounded memory. Cache entries are keyed by source path plus the decode attributes (layer, alpha, colour space, …), so two assets sharing a file keep distinct surfaces. Evicted frames are decoded again from bytes checked against the preparation hash, after re-checking that the path is still inside the scene directory. Requesting frames in a different order does not change pixels.
 
-An optional sequence SHA-256 is the hash of UTF-8 `JSON.stringify([{src,sha256}, ...])`, in enumeration order, for existing files. Missing placeholders are not file dependencies.
+A decoded image surface (float RGBA, 16 bytes per pixel) may not exceed 1 GiB (`MAX_IMAGE_BYTES`, about 67 megapixels); larger images, including declared resize targets, fail with a clear error before the surface is allocated.
+
+An optional sequence SHA-256 is the hash of UTF-8 `JSON.stringify([{src,sha256}, ...])`, in enumeration order, for existing files; it is compared case-insensitively. Missing placeholders are not file dependencies.
 
 ## B3.05 — Specialized assets
 
-- **Vector/SVG:** built-in geometry and SVG paths share the compositor's paint/stroke rules. SVG uses resvg; relative raster references are audited and embedded. Scripts, entities and external network URIs are rejected.
+- **Vector/SVG:** built-in geometry and SVG paths share the compositor's paint/stroke rules. SVG uses resvg (whose premultiplied output is unassociated once on import); relative raster references are audited and embedded. Scripts, entities and external network URIs are rejected.
 - **Lottie:** JSON and dotLottie archives use the bundled offline WASM player. `animation` selects an archive entry. `segment` accepts `firstFrame,lastFrame` or a marker name. Slots use their `id` and a JSON value understood by the Lottie player. Playback wraps within the selected segment.
 - **Mesh:** OBJ/MTL, glTF/GLB, FBX, PLY, binary `.splat`, USD/USDA/USDC and USDZ are imported. `prepareMedia().meshes` exposes imported geometry. The 0.6.0-alpha.1 geometry backend renders static triangle meshes with an explicit unlit scene material; splat rendering and imported animation/materials remain pending. See [geometry-3d.md](geometry-3d.md).
 - **Generators:** solid, gradient, noise, fractal-noise, film-grain, checkerboard, stripes, grid, cells and light-rays use deterministic coordinates and seeds. Animate `evolution` for temporal noise.
@@ -99,13 +105,13 @@ Styles resolve `basedOn` recursively. Explicit XML attributes override inherited
 
 Font sources support `fontFile`, `fontAsset`, family lookup, a comma-separated family fallback list and TTC collection indices. WOFF/WOFF2 containers are unwrapped before shaping. Fontkit applies OpenType shaping, kerning, feature settings (`kern=1,liga=0`) and variable axes (`wght=700,wdth=90`). Static fonts can receive synthetic bold/italic when requested. Bundle real faces for precise design matching.
 
-Unicode bidi levels order mixed-direction runs; `start`/`end` align relative to paragraph direction. Horizontal and vertical writing modes, language-specific case conversion, colour/text emoji, letter spacing, tracking (1/1000 em), baseline shifts, decorations, highlights, strokes, shadows and text backgrounds are supported.
+Unicode bidi levels order mixed-direction runs; `start`/`end` align relative to paragraph direction. Horizontal and vertical writing modes, language-specific case conversion, colour/text emoji, letter spacing, tracking (1/1000 em), baseline shifts, decorations, highlights, strokes, shadows and text backgrounds are supported. Both vertical modes rotate the line a quarter turn clockwise (glyphs are never mirrored); `vertical-rl` stacks lines right to left and `vertical-lr` left to right. Letter spacing and tracking are added once per shaped glyph, in measurement as in rendering, so a ligature counts once.
 
-Wrapping supports word, character, none and balanced lines. Hyphenation uses English or Portuguese patterns according to the language tag; other languages use the English fallback. Fit modes use a bounded search between minSize/maxSize. Max-lines and overflow clipping/ellipsis apply after fitting. Visible overflow carries the raster's origin into the compositor instead of changing the asset's layout box.
+Wrapping supports word, character, none and balanced lines. Trailing whitespace at the end of a line is dropped: it does not count toward line width, alignment, fitting or ellipsis placement and is not drawn. Hyphenation uses English or Portuguese patterns according to the language tag; other languages use the English fallback. Fit modes use a bounded search between minSize/maxSize. Max-lines and overflow clipping/ellipsis apply after fitting. Visible overflow carries the raster's origin into the compositor instead of changing the asset's layout box.
 
 ## B3.09 — Text animation and paths
 
-Animators are sampled at layer-local time, with character, non-space character, word, line and span selectors. Ranges accept percentages or indices; shapes, amounts, ordering, seeds, staggering, overlap and absolute-time wiggle are deterministic. Selector expressions receive `textIndex` and `textTotal`; their result is a percentage.
+Animators are sampled at layer-local time, with character, non-space character, word, line and span selectors. A word is a run of non-space text between whitespace or line breaks: hyphenation syllables and adjacent spans without a space belong to one word. Ranges accept percentages or indices; shapes, amounts, ordering, seeds, staggering, overlap and absolute-time wiggle are deterministic. Selector expressions receive `textIndex` and `textTotal`; their result is a percentage.
 
 The declared presets and custom transform/style properties can be combined with add, multiply or replace. Geometric changes are applied to shaped glyphs. Rotation X/Y and depth use a planar projection; this is not a 3D scene renderer. Named span roles constrain an animator. Counter animates numeric text; scramble uses a deterministic seed.
 

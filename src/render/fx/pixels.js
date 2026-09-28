@@ -228,28 +228,126 @@ export function mix(a, b, t) {
   o.finite = a.finite === true && b.finite === true && t >= 0 && t <= 1;
   return o;
 }
+/** Running max (min with `erode`) of the alpha channel of row `base` over
+ * [x - w, x + w], zero outside the row, by van Herk/Gil-Werman in O(n). `arg`
+ * receives the column of the extreme, or -1 where it is padding.
+ * @param {Float32Array} d @param {number} base @param {number} n @param {number} w
+ * @param {boolean} erode @param {Float64Array} val @param {Int32Array} arg
+ * @param {{g:Float64Array,gi:Int32Array,h:Float64Array,hi:Int32Array}} t */
+function slide(d, base, n, w, erode, val, arg, t) {
+  const k = 2 * w + 1,
+    len = n + 2 * w,
+    { g, gi, h, hi } = t;
+  for (let j = 0; j < len; j++) {
+    const i = j >= w && j < n + w ? j - w : -1,
+      v = i < 0 ? 0 : /** @type {number} */ (d[(base + i) * 4 + 3]),
+      p = j % k ? /** @type {number} */ (g[j - 1]) : NaN;
+    if (j % k === 0 || (erode ? v < p : v > p)) {
+      g[j] = v;
+      gi[j] = i;
+    } else {
+      g[j] = p;
+      gi[j] = /** @type {number} */ (gi[j - 1]);
+    }
+  }
+  for (let j = len - 1; j >= 0; j--) {
+    const i = j >= w && j < n + w ? j - w : -1,
+      v = i < 0 ? 0 : /** @type {number} */ (d[(base + i) * 4 + 3]),
+      first = j % k === k - 1 || j === len - 1,
+      p = first ? NaN : /** @type {number} */ (h[j + 1]);
+    if (first || (erode ? v < p : v > p)) {
+      h[j] = v;
+      hi[j] = i;
+    } else {
+      h[j] = p;
+      hi[j] = /** @type {number} */ (hi[j + 1]);
+    }
+  }
+  for (let x = 0; x < n; x++) {
+    const a = /** @type {number} */ (h[x]),
+      b = /** @type {number} */ (g[x + k - 1]);
+    if (erode ? b < a : b > a) {
+      val[x] = b;
+      arg[x] = /** @type {number} */ (gi[x + k - 1]);
+    } else {
+      val[x] = a;
+      arg[x] = /** @type {number} */ (hi[x]);
+    }
+  }
+}
 /** Disk dilation (positive radius) or erosion (negative radius), alpha only.
+ * Pixels newly covered by dilation take the unassociated colour of the
+ * neighbour that supplied their coverage. Work is O(W·H·r) inside the
+ * zero-region hint (plus the radius when dilating); the radius is capped at the
+ * surface diagonal, beyond which the disk covers the whole surface anyway.
  * @param {Surface} s @param {number} radius */
 export function morphology(s, radius) {
-  const out = copy(s),
-    r = Math.ceil(Math.abs(radius));
-  for (let y = 0; y < s.height; y++)
-    for (let x = 0; x < s.width; x++) {
-      let v = radius < 0 ? 1 : 0;
-      for (let dy = -r; dy <= r; dy++)
-        for (let dx = -r; dx <= r; dx++)
-          if (dx * dx + dy * dy <= radius * radius) {
-            const q = sample(s, x + dx, y + dy, 3);
-            v = radius < 0 ? Math.min(v, q) : Math.max(v, q);
-          }
-      const j = (y * s.width + x) * 4,
-        old = Number(s.data[j + 3]);
-      for (let k = 0; k < 3; k++)
-        out.data[j + k] = old ? (Number(s.data[j + k]) * v) / old : 0;
-      out.data[j + 3] = v;
+  const W = s.width,
+    H = s.height,
+    out = copy(s),
+    d = s.data,
+    o = out.data,
+    erode = radius < 0,
+    R = Math.min(Math.abs(radius), Math.hypot(W, H) + 1),
+    r = Math.ceil(R),
+    known = s.bbox ? clampRect(s.bbox, W, H) : fullRect(s),
+    region = erode ? known : clampRect(expandRect(known, r), W, H);
+  // Rows of the disk dx*dx + dy*dy <= R*R as [dy, half-width].
+  /** @type {number[][]} */ const spans = [];
+  for (let dy = -r; dy <= r; dy++) {
+    if (dy * dy > R * R) continue;
+    let w = Math.floor(Math.sqrt(R * R - dy * dy));
+    while ((w + 1) * (w + 1) + dy * dy <= R * R) w++;
+    while (w > 0 && w * w + dy * dy > R * R) w--;
+    spans.push([dy, w]);
+  }
+  const len = W + 2 * r + 1,
+    scratch = {
+      g: new Float64Array(len),
+      gi: new Int32Array(len),
+      h: new Float64Array(len),
+      hi: new Int32Array(len),
+    },
+    val = new Float64Array(W),
+    arg = new Int32Array(W),
+    best = new Float64Array(W),
+    from = new Int32Array(W);
+  for (let y = region.y0; y < region.y1; y++) {
+    best.fill(erode ? 1 : 0);
+    from.fill(-1);
+    for (const [dy, w] of spans) {
+      const yy = y + Number(dy);
+      if (yy < 0 || yy >= H) {
+        // A row outside the surface is transparent.
+        if (erode) best.fill(0);
+        continue;
+      }
+      slide(d, yy * W, W, Number(w), erode, val, arg, scratch);
+      for (let x = region.x0; x < region.x1; x++) {
+        const v = /** @type {number} */ (val[x]),
+          b = /** @type {number} */ (best[x]),
+          c = /** @type {number} */ (arg[x]);
+        if (erode ? v < b : v > b) {
+          best[x] = v;
+          from[x] = c < 0 ? -1 : yy * W + c;
+        }
+      }
     }
-  out.bbox = s.bbox
-    ? clampRect(expandRect(s.bbox, r + 1), s.width, s.height)
-    : undefined;
+    for (let x = region.x0; x < region.x1; x++) {
+      const j = (y * W + x) * 4,
+        v = /** @type {number} */ (best[x]),
+        old = Number(d[j + 3]),
+        src = /** @type {number} */ (from[x]) * 4,
+        a = src >= 0 ? Number(d[src + 3]) : 0;
+      for (let k = 0; k < 3; k++)
+        o[j + k] = old
+          ? (Number(d[j + k]) * v) / old
+          : !erode && v > 0 && a
+            ? (Number(d[src + k]) * v) / a
+            : 0;
+      o[j + 3] = v;
+    }
+  }
+  out.bbox = s.bbox ? clampRect(expandRect(s.bbox, r + 1), W, H) : undefined;
   return out;
 }

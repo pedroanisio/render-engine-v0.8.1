@@ -665,9 +665,12 @@ export class Physics {
               (Number(a.y ?? 0) / this.ppm - p.y) / this.dt,
             ),
           );
+          // decompose() yields atan2 angles in (-180, 180] while the body
+          // angle is continuous; take the shortest turn to avoid a full spin.
+          const turn =
+            (Number(a.rotation ?? 0) * Math.PI) / 180 - e.body.getAngle();
           e.body.setAngularVelocity(
-            ((Number(a.rotation ?? 0) * Math.PI) / 180 - e.body.getAngle()) /
-              this.dt,
+            (turn - 2 * Math.PI * Math.round(turn / (2 * Math.PI))) / this.dt,
           );
         }
         const p = e.body.getWorldCenter(),
@@ -721,7 +724,8 @@ export class Physics {
       this.tick++;
       for (const j of this.joints)
         if (!this.broken.has(j.id)) {
-          const f = j.joint.getReactionForce(1 / this.dt);
+          // Reaction impulses belong to the last substep, so scale by its rate.
+          const f = j.joint.getReactionForce(this.substeps / this.dt);
           if (Math.hypot(f.x, f.y) > j.limit) {
             this.world.destroyJoint(j.joint);
             this.broken.add(j.id);

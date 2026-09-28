@@ -8,13 +8,32 @@ export function fpsOf(value) {
   if (!n || !d || n < 0 || d < 0) throw new Error('FPS must be positive');
   return { numerator: n, denominator: d, value: n / d };
 }
-/** @param {string} text @param {number} fps */
+/**
+ * Seconds or SMPTE timecode. Labels count frames at the nominal rate round(fps);
+ * `HH:MM:SS:FF` is non-drop-frame, `HH:MM:SS;FF` is drop-frame (29.97/59.94 only).
+ * @param {string} text @param {number} fps
+ */
 export function timecode(text, fps) {
   if (/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) return Number(text);
-  const m = /^(\d+):([0-5]\d):([0-5]\d):(\d+)$/.exec(text);
-  if (!m || Number(m[4]) >= Math.ceil(fps))
-    throw new Error(`invalid non-drop-frame timecode ${text}`);
-  return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number(m[4]) / fps;
+  const m = /^(\d+):([0-5]\d):([0-5]\d)([:;])(\d+)$/.exec(text);
+  const nominal = Math.round(fps);
+  if (!m || !(nominal > 0) || Number(m[5]) >= nominal)
+    throw new Error(`invalid ${m?.[4] === ';' ? 'drop-frame' : 'non-drop-frame'} timecode ${text}`);
+  const min = Number(m[2]),
+    ff = Number(m[5]),
+    seconds = Number(m[3]),
+    minutes = Number(m[1]) * 60 + min;
+  let frames = (minutes * 60 + seconds) * nominal + ff;
+  if (m[4] === ';') {
+    // SMPTE 12M: drop 2 (4 at 59.94) frame labels each minute except every tenth.
+    const drop = nominal / 15;
+    if (![30, 60].includes(nominal) || Math.abs(fps - (nominal * 1000) / 1001) > 1e-6)
+      throw new Error(`drop-frame timecode ${text} requires 30000/1001 or 60000/1001 fps`);
+    if (seconds === 0 && min % 10 !== 0 && ff < drop)
+      throw new Error(`invalid drop-frame timecode ${text}: frame label is dropped`);
+    frames -= drop * (minutes - Math.floor(minutes / 10));
+  }
+  return frames / fps;
 }
 /** @param {Node} scene */
 export function clocks(scene) {
@@ -28,6 +47,7 @@ export function clocks(scene) {
   const grid = grids[0];
   const period = 60 / Number(grid?.attributes.bpm ?? 60);
   const offset = Number(grid?.attributes.offset ?? 0);
+  if (!Number.isFinite(offset)) throw new Error('beatGrid offset must be finite');
   if (grid) {
     for (let i = 0; offset + i * period <= duration; i++) {
       markers.set(`beat.${i}`, offset + i * period);
@@ -40,7 +60,9 @@ export function clocks(scene) {
     if (n.name === 'marker') {
       const id = String(n.attributes.id);
       if (markers.has(id)) throw new Error(`duplicate generated marker ${id}`);
-      markers.set(id, Number(n.attributes.time));
+      const time = Number(n.attributes.time);
+      if (!Number.isFinite(time)) throw new Error(`${n.path}: marker ${id} time must be finite`);
+      markers.set(id, time);
     }
   /** @param {unknown} id */
   const marker = (id) => {
@@ -73,6 +95,7 @@ export function clocks(scene) {
       shift = Number(a.timeOffset ?? 0);
     if (!Number.isFinite(scale) || scale === 0)
       throw new Error(`${n.path}: timeScale must be finite and nonzero`);
+    if (!Number.isFinite(shift)) throw new Error(`${n.path}: timeOffset must be finite`);
     /** @type {import('./track.js').Track|undefined} */
     let remap;
     if (n.sourceRemap) {
@@ -136,9 +159,14 @@ export function clocks(scene) {
         ['group', 'layer', 'shape', 'instance', 'sequence', 'particleEmitter'].includes(c.name)
       ) {
         const originalStart = Number(c.attributes.start ?? 0);
-        const length = Number(c.attributes.end ?? c.attributes.duration ?? end) - originalStart;
-        if (length <= 0) throw new Error(`${c.path}: sequence child needs a positive duration`);
         const placedStart = cursor + originalStart;
+        // Without an end the child fills the parent duration still available after placement.
+        const length =
+          c.attributes.end === undefined
+            ? end - placedStart
+            : Number(c.attributes.end) - originalStart;
+        if (!(length > 0) || !Number.isFinite(placedStart))
+          throw new Error(`${c.path}: sequence child needs a positive duration`);
         walk(c, clock, { start: placedStart, end: placedStart + length });
         cursor = placedStart + length + Number(a.timeGap ?? 0);
       } else walk(c, clock);

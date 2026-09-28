@@ -63,7 +63,9 @@ export const gradeTypes = new Set(
     " ",
   ),
 );
-/** @param {Surface} s @param {Params} p */
+/** The agx/filmic/aces2 tonemappers take and return linear sRGB; callers in
+ * another working space convert around them (see processEffect).
+ * @param {Surface} s @param {Params} p */
 export function grade(s, p) {
   if (
     p.type === "tonemap" &&

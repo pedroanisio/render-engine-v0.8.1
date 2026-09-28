@@ -20,14 +20,19 @@ export function defaultThreads() {
 }
 
 export class FramePool {
-  /** @param {RenderOptions} o @param {number} threads */
-  constructor(o, threads) {
+  /**
+   * @param {RenderOptions} o @param {number} threads
+   * @param {import('./setup.js').SceneSnapshot} [snapshot] scene bytes and text inputs
+   * the pipeline hashed; workers build from these instead of re-reading the disk
+   */
+  constructor(o, threads, snapshot) {
     // Functions and signals cannot cross threads; shards render serially.
     const { signal, log, jobs, shard, ...rest } = o;
     void log;
     void jobs;
     void shard;
     this.options = { ...rest, threads: 1 };
+    this.snapshot = snapshot;
     this.signal = signal;
     this.threads = threads;
     /** @type {Worker[]} */ this.workers = [];
@@ -44,7 +49,7 @@ export class FramePool {
     /** @type {Promise<void>[]} */ const ready = [];
     for (let i = 0; i < this.threads; i++) {
       const worker = new Worker(url, {
-        workerData: { options: this.options },
+        workerData: { options: this.options, snapshot: this.snapshot },
       });
       this.workers.push(worker);
       ready.push(

@@ -216,37 +216,151 @@ export function parseCaptions(track, data, format) {
       );
     }
   } else if (format === "ttml" || format === "itt") {
-    /** @type {Map<string,Record<string,string>>} */ const definitions=new Map();
-    const definitionsParser=new SaxesParser({xmlns:true});
-    definitionsParser.on('opentag',tag=>{const a=Object.fromEntries(Object.values(tag.attributes).map(a=>[a.local,a.value]));if(['style','region'].includes(tag.local)&&a.id)definitions.set(a.id,a);});
+    /** @type {Map<string,Record<string,string>>} */ const definitions =
+      new Map();
+    const definitionsParser = new SaxesParser({ xmlns: true });
+    definitionsParser.on("opentag", (tag) => {
+      const a = Object.fromEntries(
+        Object.values(tag.attributes).map((a) => [a.local, a.value]),
+      );
+      if (["style", "region"].includes(tag.local) && a.id)
+        definitions.set(a.id, a);
+    });
     definitionsParser.write(data).close();
     /** @param {string} id @param {Set<string>} [seen] @returns {Record<string,string>} */
-    const resolve=(id,seen=new Set())=>{if(seen.has(id))throw new Error('caption style cycle');seen.add(id);const a=definitions.get(id)??{};return Object.assign({},...String(a.style??'').split(/\s+/).filter(Boolean).map(id=>resolve(id,new Set(seen))),a);};
+    const resolve = (id, seen = new Set()) => {
+      if (seen.has(id)) throw new Error("caption style cycle");
+      seen.add(id);
+      const a = definitions.get(id) ?? {};
+      return Object.assign(
+        {},
+        ...String(a.style ?? "")
+          .split(/\s+/)
+          .filter(Boolean)
+          .map((id) => resolve(id, new Set(seen))),
+        a,
+      );
+    };
     const parser = new SaxesParser({ xmlns: true });
-    let fps=30,tickRate=30;
-    /** @type {Array<{start:number,end:number,node?:Node,word?:Node,style:Record<string,string>,sequential:boolean,cursor:number}>} */const stack=[];
-    const time=(/** @type {string} */s)=>captionTime(s,s.endsWith('t')?tickRate:fps);
-    parser.on('opentag',tag=>{
-      const a=Object.fromEntries(Object.values(tag.attributes).map(a=>[a.local,a.value]));
-      if(a.frameRate)fps=Number(a.frameRate)*Number(a.frameRateMultiplier?.split(' ')[0]??1)/Number(a.frameRateMultiplier?.split(' ')[1]??1);
-      if(a.tickRate)tickRate=Number(a.tickRate);
-      const parent=stack.at(-1),base=parent?.sequential?parent.cursor:parent?.start??0,start=base+(a.begin?time(a.begin):0),end=a.end?base+time(a.end):a.dur?start+time(a.dur):parent?.end??Infinity;
-      const inherited=Object.assign({},parent?.style??{},...String(a.region??'').split(/\s+/).filter(Boolean).map(id=>resolve(id)),...String(a.style??'').split(/\s+/).filter(Boolean).map(id=>resolve(id)),a);
-      const sourceStyle={...(inherited.color?{color:inherited.color}:{}),...(inherited.fontSize?{size:parseFloat(inherited.fontSize)}:{}),...(inherited.fontFamily?{font:inherited.fontFamily}:{}),...(inherited.fontWeight?{weight:inherited.fontWeight==='bold'?700:400}:{}),...(inherited.fontStyle?{fontStyle:inherited.fontStyle}:{}),...(inherited.textAlign?{align:inherited.textAlign}:{})};
-      const origin=inherited.origin?.split(/\s+/),extent=inherited.extent?.split(/\s+/);
-      const position=origin?.every((/** @type {string} */v)=>v.endsWith('%'))?`position:${parseFloat(String(origin[0]))+parseFloat(String(extent?.[0]??0))/2}% line:${parseFloat(String(origin[1]))+parseFloat(String(extent?.[1]??0))/2}%`:undefined;
-      const n=tag.local==='p'?cue(track,{start,end,text:'',sourceStyle:JSON.stringify(sourceStyle),...(position?{position}:{})}):undefined;
-      const p=[...stack].reverse().find(s=>s.node)?.node;
-      if(tag.local==='br'&&p)p.attributes={...p.attributes,text:String(p.attributes.text)+'\n'};
-      const word=tag.local==='span'&&p&&(a.begin||a.end||a.dur)?{...track,name:'word',type:'captionWordType',attributes:{start,end,text:'',emphasis:inherited.fontWeight==='bold'},children:[]}:undefined;
-      stack.push({start,end,node:n,word,style:inherited,sequential:a.timeContainer==='seq',cursor:start});
+    let fps = 30,
+      tickRate = 30;
+    /** @type {Array<{start:number,end:number,node?:Node,word?:Node,style:Record<string,string>,sequential:boolean,cursor:number}>} */ const stack =
+      [];
+    const time = (/** @type {string} */ s) =>
+      captionTime(s, s.endsWith("t") ? tickRate : fps);
+    parser.on("opentag", (tag) => {
+      const a = Object.fromEntries(
+        Object.values(tag.attributes).map((a) => [a.local, a.value]),
+      );
+      if (a.frameRate)
+        fps =
+          (Number(a.frameRate) *
+            Number(a.frameRateMultiplier?.split(" ")[0] ?? 1)) /
+          Number(a.frameRateMultiplier?.split(" ")[1] ?? 1);
+      if (a.tickRate) tickRate = Number(a.tickRate);
+      const parent = stack.at(-1),
+        base = parent?.sequential ? parent.cursor : (parent?.start ?? 0),
+        start = base + (a.begin ? time(a.begin) : 0),
+        end = a.end
+          ? base + time(a.end)
+          : a.dur
+            ? start + time(a.dur)
+            : (parent?.end ?? Infinity);
+      const inherited = Object.assign(
+        {},
+        parent?.style ?? {},
+        ...String(a.region ?? "")
+          .split(/\s+/)
+          .filter(Boolean)
+          .map((id) => resolve(id)),
+        ...String(a.style ?? "")
+          .split(/\s+/)
+          .filter(Boolean)
+          .map((id) => resolve(id)),
+        a,
+      );
+      const sourceStyle = {
+        ...(inherited.color ? { color: inherited.color } : {}),
+        ...(inherited.fontSize ? { size: parseFloat(inherited.fontSize) } : {}),
+        ...(inherited.fontFamily ? { font: inherited.fontFamily } : {}),
+        ...(inherited.fontWeight
+          ? { weight: inherited.fontWeight === "bold" ? 700 : 400 }
+          : {}),
+        ...(inherited.fontStyle ? { fontStyle: inherited.fontStyle } : {}),
+        ...(inherited.textAlign ? { align: inherited.textAlign } : {}),
+      };
+      const origin = inherited.origin?.split(/\s+/),
+        extent = inherited.extent?.split(/\s+/);
+      const position = origin?.every((/** @type {string} */ v) =>
+        v.endsWith("%"),
+      )
+        ? `position:${parseFloat(String(origin[0])) + parseFloat(String(extent?.[0] ?? 0)) / 2}% line:${parseFloat(String(origin[1])) + parseFloat(String(extent?.[1] ?? 0)) / 2}%`
+        : undefined;
+      const n =
+        tag.local === "p"
+          ? cue(track, {
+              start,
+              end,
+              text: "",
+              sourceStyle: JSON.stringify(sourceStyle),
+              ...(position ? { position } : {}),
+            })
+          : undefined;
+      const p = [...stack].reverse().find((s) => s.node)?.node;
+      if (tag.local === "br" && p)
+        p.attributes = {
+          ...p.attributes,
+          text: String(p.attributes.text) + "\n",
+        };
+      const word =
+        tag.local === "span" && p && (a.begin || a.end || a.dur)
+          ? {
+              ...track,
+              name: "word",
+              type: "captionWordType",
+              attributes: {
+                start,
+                end,
+                text: "",
+                emphasis: inherited.fontWeight === "bold",
+              },
+              children: [],
+            }
+          : undefined;
+      stack.push({
+        start,
+        end,
+        node: n,
+        word,
+        style: inherited,
+        sequential: a.timeContainer === "seq",
+        cursor: start,
+      });
     });
-    parser.on('text',text=>{
-      const p=[...stack].reverse().find(s=>s.node)?.node,w=[...stack].reverse().find(s=>s.word)?.word;
-      if(p)p.attributes={...p.attributes,text:String(p.attributes.text)+text};
-      if(w)w.attributes={...w.attributes,text:String(w.attributes.text)+text};
+    parser.on("text", (text) => {
+      const p = [...stack].reverse().find((s) => s.node)?.node,
+        w = [...stack].reverse().find((s) => s.word)?.word;
+      if (p)
+        p.attributes = {
+          ...p.attributes,
+          text: String(p.attributes.text) + text,
+        };
+      if (w)
+        w.attributes = {
+          ...w.attributes,
+          text: String(w.attributes.text) + text,
+        };
     });
-    parser.on('closetag',()=>{const item=stack.pop();const parent=stack.at(-1);if(parent?.sequential&&item)parent.cursor=item.end;if(item?.node)cues.push(item.node);if(item?.word){const p=[...stack].reverse().find(s=>s.node)?.node;if(p)p.children=[...p.children,item.word];}});
+    parser.on("closetag", () => {
+      const item = stack.pop();
+      const parent = stack.at(-1);
+      if (parent?.sequential && item) parent.cursor = item.end;
+      if (item?.node) cues.push(item.node);
+      if (item?.word) {
+        const p = [...stack].reverse().find((s) => s.node)?.node;
+        if (p) p.children = [...p.children, item.word];
+      }
+    });
     parser.write(data).close();
   } else throw new Error(`unsupported caption source format ${format}`);
   if (!cues.length && data.trim())
@@ -414,37 +528,35 @@ export function prepareCaptions(scene, read, path) {
     return paginateTrack({ ...track, children });
   });
 }
-/** @param {Node} track @param {number} start @param {number} end */
+/** Rebase cues overlapping [start,end). A cue keeps its full text, as burn-in
+ * shows it; if any word timing falls outside the interval the cue is emitted
+ * without word timings, so line breaks and text come from the whole cue.
+ * @param {Node} track @param {number} start @param {number} end */
 export function clipCaptions(track, start, end) {
+  /** @param {Node} n */
+  const inside = (n) =>
+    Number(n.attributes.start) < end && Number(n.attributes.end) > start;
+  /** @param {Node} n */
+  const rebase = (n) => ({
+    ...n,
+    attributes: {
+      ...n.attributes,
+      start: Math.max(start, Number(n.attributes.start)) - start,
+      end: Math.min(end, Number(n.attributes.end)) - start,
+    },
+  });
   return {
     ...track,
-    children: track.children
-      .filter(
-        (c) =>
-          Number(c.attributes.start) < end && Number(c.attributes.end) > start,
-      )
-      .map((c) => ({
-        ...c,
-        attributes: {
-          ...c.attributes,
-          start: Math.max(start, Number(c.attributes.start)) - start,
-          end: Math.min(end, Number(c.attributes.end)) - start,
-        },
-        children: c.children
-          .filter(
-            (w) =>
-              Number(w.attributes.start) < end &&
-              Number(w.attributes.end) > start,
-          )
-          .map((w) => ({
-            ...w,
-            attributes: {
-              ...w.attributes,
-              start: Math.max(start, Number(w.attributes.start)) - start,
-              end: Math.min(end, Number(w.attributes.end)) - start,
-            },
-          })),
-      })),
+    children: track.children.filter(inside).map((c) => {
+      const cue = rebase(c),
+        words = c.children.filter((w) => w.name === "word");
+      return {
+        ...cue,
+        children: words.every(inside)
+          ? c.children.map((w) => (w.name === "word" ? rebase(w) : w))
+          : c.children.filter((w) => w.name !== "word"),
+      };
+    }),
   };
 }
 /** @param {Node} track */

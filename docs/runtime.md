@@ -44,8 +44,13 @@ enable it in the backend.
 
 All times are seconds. The project FPS retains its numerator and denominator;
 the FFmpeg encoder receives the rational FPS string. `timecode(text, fps)`
-accepts seconds or non-drop-frame `HH:MM:SS:FF`; drop-frame notation is not
-accepted. Visibility intervals are half-open `[start,end)`.
+accepts seconds, non-drop-frame `HH:MM:SS:FF` or drop-frame `HH:MM:SS;FF`.
+Timecode labels count frames at the nominal rate `round(fps)`, so the label's
+frame number is divided by the actual rate (`00:00:01:00` at 30000/1001 is
+30 frames, 1.001 s). Drop-frame is accepted only at 30000/1001 and 60000/1001
+and skips 2 (respectively 4) labels each minute except every tenth; a dropped
+label is an error. Visibility intervals are half-open `[start,end)`.
+Marker times, key times, `timeOffset` and beat-grid offsets must be finite.
 
 Unspecified bounds inherit from the parent, then from the project.
 `startMarker`/`endMarker` add the corresponding numeric attribute as an offset.
@@ -61,7 +66,8 @@ times are supported by track extrapolation.
 
 Sequences place each child after the previous end plus `timeGap`, then add the
 child's explicit start offset. Child duration is its declared end minus start,
-or the available parent duration when no end was supplied.
+or, when no end was supplied, the parent duration still available from the
+child's placed start to the sequence end.
 
 `runtime.instanceValue(instanceId, innerId, property, time)` evaluates a
 symbol's property with instance-local overrides and its own source clock.
@@ -89,8 +95,11 @@ visibility and z. The current compositor consumes its supported properties;
 unsupported material/compositor operations fail preflight.
 
 Equal key times create a discontinuity: the later key wins at that instant.
-Linear extrapolation skips duplicate-time intervals. Hold, loop, ping-pong and
-numeric offset extrapolation are deterministic for negative and positive time.
+Linear extrapolation skips duplicate-time intervals; non-numeric tracks hold
+instead. Hold, loop, ping-pong and numeric offset extrapolation are
+deterministic for negative and positive time. Vector and unit-length values
+(`50%`, `10vw`) interpolate per segment with the same easing, handles, hold,
+step(s) and spring curves as numbers.
 
 Temporal handles are normalized `influence,speed`: outgoing Bézier coordinates
 are `(influence,influence*speed)`, incoming coordinates are their complements.
@@ -119,15 +128,28 @@ index/textIndex are 0 and count/textTotal are 1.
 
 `valueAtTime` samples the pre-expression track stack, preventing self-recursion.
 `loopIn/loopOut` use the selected key interval (0 means the full interval).
-Random/noise use a stateless 32-bit coordinate hash; a seed comes from the
-expression or the project. `noise` is lattice noise; `wiggle` interpolates
-lattice samples and supports up to 16 octaves. Evaluation order does not affect
-results. `frame` is composition seconds times rational FPS.
+Random/noise use a stateless 32-bit coordinate hash. An explicit expression
+`seed` is used as given; otherwise the project seed is mixed with an FNV-1a hash
+of the owner's id (or path) and the property name, so `x: random()` and
+`y: random()` on one node differ while staying deterministic. `random()` draws
+per frame index. `noise` is lattice noise; `wiggle` interpolates lattice
+samples and supports up to 16 octaves. Evaluation order does not affect
+results. `frame` is composition seconds times rational FPS, snapped to the
+integer frame when within 1e-6 of it.
+
+Each top-level `value()` call memoizes nested evaluations by
+node, property and time, so repeated `prop()` references and smoothed links do
+not re-evaluate shared inputs. At most 100,000 distinct property evaluations
+are allowed per top-level call; exceeding that budget is an error naming the
+property being evaluated. Driven list-typed values (for example number lists)
+are revalidated in their space-separated lexical form.
 
 Motion paths support SVG commands, arc-length traversal, equal time per segment
 with native curve parameters when `constantSpeed=false`, additive/replacement
 progress tracks, tangent orientation and orientation offset. Zero-radius SVG
-arcs are normalized to lines. Auto-orientation requires a backend that supports
+arcs are normalized to lines, and compact arc flags (`a5 5 0 0110 10`) parse.
+Smooth (`S`/`T`) and relative commands are normalized to absolute cubic and
+quadratic segments before parameter-space traversal. Auto-orientation requires a backend that supports
 rotation on the owner (currently image/text layers).
 
 Links read a property, parameter, marker or analyzed audio band. Delay shifts
@@ -145,7 +167,10 @@ instance. Unknown parameters, targets and properties are errors.
 Parameter types: string, number, boolean (`true/false/1/0`), color, asset, enum,
 list (JSON array) and time. The runtime checks required values, numeric bounds,
 maxLength, ECMAScript regex patterns, and options separated by comma, semicolon
-or `|`. Asset parameters must name an asset. `{{id}}` substitutes parameter
+or `|`. A `pattern` must match the whole value, as in XSD (it is applied as
+`^(?:pattern)$`); values longer than 10,000 characters are rejected for any
+parameter that declares a pattern, which bounds (but does not eliminate) the
+cost of pathological backtracking patterns. Asset parameters must name an asset. `{{id}}` substitutes parameter
 values in string attributes, which are revalidated against their XSD type.
 
 Bind maps use `input=output;input=output`; an unmapped value passes through.
@@ -165,7 +190,8 @@ npx scene-render render scene.xml --data customers --row 2 --param locale=pt
 Track, bus and master volume, track/bus gain and pan automation are evaluated
 per sample at 48 kHz. Stereo float WAV envelopes feed FFmpeg `amultiply` after
 track trim/fades and before track effects, or at the corresponding bus/master.
-Pan is constant-power with unity gain at center. Envelope files are streamed
+Pan is clamped to `[-1,1]` and is constant-power with unity gain at center.
+An animated `mute` is evaluated per sample. Envelope files are streamed
 in bounded chunks. RIFF's size limit is reported, not silently truncated.
 
 `audioAmplitude(id, band)` in the rendering pipeline reads causal 1,024-sample

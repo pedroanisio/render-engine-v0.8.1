@@ -1,10 +1,22 @@
 /** Namespace and expand reusable visual structure before animation compilation. */
 import { createHash } from 'node:crypto';
-import { posix } from 'node:path';
+import { posix, win32 } from 'node:path';
+import { assetPath } from '../media/resolve.js';
 import { MODEL } from '../generated/model.js';
 import { simple, propertyValue } from '../eval/value.js';
 /** @typedef {import('../xsd/validate.js').ValidNode} Node */
-/** @typedef {{read?:(src:string)=>string,load?:(xml:string)=>{ok:boolean,scene?:Node,diagnostics?:unknown},maxInstances?:number}} Options */
+/**
+ * `read` receives scene-relative include paths and must enforce canonical
+ * (symlink-resolving) containment itself; when `root` is given, expansion also
+ * checks each include against it with {@link assetPath} before reading.
+ * @typedef {{read?:(src:string)=>string,load?:(xml:string)=>{ok:boolean,scene?:Node,diagnostics?:unknown},maxInstances?:number,root?:string}} Options
+ */
+/** Node count of a subtree. @param {Node} n @returns {number} */
+const size = (n) => n.children.reduce((t, c) => t + size(c), 1);
+/** Attributes holding scene-relative file paths, rebased when included. */
+const PATH_ATTRIBUTES = ['src', 'proxy', 'cache'];
+/** @param {string} v */
+const isLocalRelative = (v) => v !== '' && !/^[a-z][a-z0-9+.-]*:/i.test(v) && !posix.isAbsolute(v) && !win32.isAbsolute(v);
 /** @param {Node} input @param {Record<string,any>} params @param {Map<string,Record<string,any>[]>} data @param {Options} options */
 export function expandScene(input, params, data, options = {}) {
   let count = 0;
@@ -16,6 +28,8 @@ export function expandScene(input, params, data, options = {}) {
     ]),
   );
   /** @type {Map<string,Node[]>} */ const merged = new Map();
+  /** Parsed include documents, keyed by normalized path. @type {Map<string,{xml:string,scene:Node}>} */
+  const included = new Map();
   /** @param {Node[]} nodes @param {string} prefix @param {Node[]} overrides @param {Record<string,any>} [context] @returns {Node[]} */
   const scope = (nodes, prefix, overrides, context = {}) => {
     const names = new Map(),
@@ -37,6 +51,7 @@ export function expandScene(input, params, data, options = {}) {
         .replace(/url\(#([^)]*)\)/g, (_, id) => `url(#${names.get(id) ?? id})`)
         .replace(/\bprop\((['"])(.*?)\1\)/g, (_, q, ref) => {
           const dot = ref.lastIndexOf('.');
+          if (dot < 1) return `prop(${q}${ref}${q})`;
           return `prop(${q}${names.get(ref.slice(0, dot)) ?? ref.slice(0, dot)}${ref.slice(dot)}${q})`;
         })
         .replace(/\{\{([^}]+)\}\}/g, (original, key) => {
@@ -47,7 +62,8 @@ export function expandScene(input, params, data, options = {}) {
     /** @param {Node} n @returns {Node} */ const clone = (n) => {
       const a = { ...n.attributes };
       for (const [k, v] of Object.entries(a)) {
-        const type = MODEL.complexTypes[n.type]?.attributes[k]?.type;
+        const def = Object.hasOwn(MODEL.complexTypes, n.type) ? MODEL.complexTypes[n.type] : undefined;
+        const type = def && Object.hasOwn(def.attributes, k) ? def.attributes[k]?.type : undefined;
         if (k === 'name' && n.name === 'token') a[k] = tokens.get(String(v)) ?? v;
         else if (k === 'id') a[k] = names.get(String(v)) ?? v;
         else if (type && simple.idKind(type)?.startsWith('IDREF'))
@@ -58,7 +74,7 @@ export function expandScene(input, params, data, options = {}) {
           a[k] = rewrite(v);
           if (k === 'source' && n.name === 'link') {
             const dot = v.lastIndexOf('.');
-            a[k] = (names.get(v.slice(0, dot)) ?? v.slice(0, dot)) + v.slice(dot);
+            if (dot > 0) a[k] = (names.get(v.slice(0, dot)) ?? v.slice(0, dot)) + v.slice(dot);
           }
         }
       }
@@ -166,12 +182,18 @@ export function expandScene(input, params, data, options = {}) {
         throw new Error('include escapes scene directory');
       if (files.includes(path)) throw new Error('include cycle');
       if (!options.read || !options.load) throw new Error('include requires a scene reader');
-      const xml = options.read(path);
-      if (a.sha256 && createHash('sha256').update(xml).digest('hex') !== a.sha256)
+      let doc = included.get(path);
+      if (!doc) {
+        if (options.root !== undefined) assetPath(options.root, path);
+        const xml = options.read(path);
+        const loaded = options.load(xml);
+        if (!loaded.ok || !loaded.scene) throw new Error(`invalid included scene ${path}`);
+        doc = { xml, scene: loaded.scene };
+        included.set(path, doc);
+      }
+      if (a.sha256 && createHash('sha256').update(doc.xml).digest('hex') !== a.sha256)
         throw new Error('include sha256 mismatch');
-      const loaded = options.load(xml);
-      if (!loaded.ok || !loaded.scene) throw new Error(`invalid included scene ${path}`);
-      const foreign = loaded.scene,
+      const foreign = doc.scene,
         selected =
           a.symbol === undefined
             ? foreign.children.find((n) => n.name === 'composition')
@@ -189,14 +211,18 @@ export function expandScene(input, params, data, options = {}) {
       );
       /** @param {Node} c @returns {Node} */ const repair = (c) => {
         const attrs = { ...c.attributes };
-        if (attrs.src !== undefined && c.name !== 'include')
-          attrs.src = posix.join(posix.dirname(path), String(attrs.src));
+        if (c.name !== 'include')
+          for (const k of PATH_ATTRIBUTES)
+            if (typeof attrs[k] === 'string' && isLocalRelative(attrs[k]))
+              attrs[k] = posix.join(posix.dirname(path), attrs[k]);
         return { ...c, attributes: attrs, children: c.children.map(repair) };
       };
       const children = [];
       for (const c of scoped) {
         if (roots.some((r) => r.name === c.name)) {
           const fixed = repair(c);
+          count += size(fixed) - 1;
+          if (count > budget) throw new Error('scene expansion exceeds node budget');
           merged.set(c.name, [...(merged.get(c.name) ?? []), ...fixed.children]);
           if (c.name === 'symbols')
             for (const s of fixed.children) symbols.set(String(s.attributes.id), s);

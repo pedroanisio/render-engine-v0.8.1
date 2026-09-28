@@ -38,7 +38,10 @@ export function svgSurface(svg, width, height) {
       fitTo: { mode: 'width', value: width },
     }).render(),
     rgba = png.pixels;
-  const source = rgbaSurface(rgba, png.width, png.height);
+  // resvg returns premultiplied RGBA (50% white is 128,128,128,128).
+  const source = rgbaSurface(rgba, png.width, png.height, {
+    alpha: 'premultiplied',
+  });
   if (png.height === height) return source;
   const out = new Surface(width, height);
   for (let y = 0; y < height; y++)

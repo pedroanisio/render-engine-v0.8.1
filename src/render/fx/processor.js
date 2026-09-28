@@ -4,6 +4,7 @@ import { native, resources, bundle } from "./native.js";
 import { composite } from "../geometry/blend.js";
 import { Surface, clampRect, fullRect } from "../surface.js";
 import { parseColor } from "../color.js";
+import { frameIndex } from "../../eval/frames.js";
 import { filmGrain, halftone, scanlines, blur } from "../effects.js";
 import { grade, gradeTypes } from "./grade.js";
 import { spatial, spatialTypes } from "./spatial.js";
@@ -106,8 +107,20 @@ export function processEffect(s, p, ctx) {
         ),
       ),
     };
-  if (gradeTypes.has(type)) out = grade(s, p);
-  else if (spatialTypes.has(type)) out = spatial(s, p, ctx);
+  if (gradeTypes.has(type)) {
+    const working = ctx.workingSpace ?? "linear-srgb";
+    // The OCIO display tonemappers take and return linear sRGB.
+    out =
+      type === "tonemap" &&
+      ["agx", "filmic", "aces2"].includes(String(p.tonemapper)) &&
+      working !== "linear-srgb"
+        ? convertSpace(
+            grade(convertSpace(s, working, "linear-srgb"), p),
+            "linear-srgb",
+            working,
+          )
+        : grade(s, p);
+  } else if (spatialTypes.has(type)) out = spatial(s, p, ctx);
   else if (
     type === "glow" ||
     type === "film-grain" ||
@@ -211,7 +224,10 @@ export function processEffect(s, p, ctx) {
       falloff = p.falloff,
       scale = ctx.scale,
       lights = (ctx.lights ?? []).map((l) => {
-        const lc = parseColor(String(l.color ?? "#FFFFFF")),
+        const raw = (ctx.parseColor ?? parseColor)(
+            String(l.color ?? "#FFFFFF"),
+          ),
+          lc = ctx.color ? ctx.color(raw) : raw,
           gain = Number(l.intensity ?? 1),
           exposure = 2 ** Number(l.exposure ?? 0);
         return {
@@ -300,7 +316,10 @@ export function processEffect(s, p, ctx) {
                 k,
               ),
             );
-      return [Number(q[0]), Number(q[1]), Number(q[2]), a * Number(q[3])];
+      // Raster sources are premultiplied; colors() expects unassociated RGB.
+      const qa = Number(q[3]),
+        u = ctx.paint ? 1 : qa ? 1 / qa : 0;
+      return [Number(q[0]) * u, Number(q[1]) * u, Number(q[2]) * u, a * qa];
     });
   } else if (type === "selective-color") {
     const key = p.keyValue ?? parseColor(String(p.keyColor ?? "#FF0000")),
@@ -322,7 +341,7 @@ export function processEffect(s, p, ctx) {
     const frequency = Number(p.frequency ?? 1);
     if (frequency <= 0) throw new Error(`${type} frequency must be positive`);
     if (type === "posterize-time")
-      out = ctx.sample(Math.floor(ctx.time * frequency) / frequency);
+      out = ctx.sample(frameIndex(ctx.time, frequency) / frequency);
     else if (type === "pixel-motion-blur")
       out = motion(s, ctx.sample(ctx.time + 1 / ctx.fps), p, ctx.scale);
     else {

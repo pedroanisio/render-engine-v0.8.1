@@ -45,7 +45,11 @@ export async function processRun(command, args, options = {}) {
     if (options.graceful) escalation = setTimeout(() => kill("SIGKILL"), 2000);
   };
   options.signal?.addEventListener("abort", stop, { once: true });
-  const timer = setTimeout(stop, options.timeout ?? 3600000);
+  // No implicit deadline: long shards and encodes run until they finish or are cancelled.
+  const timer =
+    options.timeout === undefined
+      ? undefined
+      : setTimeout(stop, options.timeout);
   try {
     for await (const frame of options.frames ?? []) {
       options.signal?.throwIfAborted();

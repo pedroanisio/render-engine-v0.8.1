@@ -8,6 +8,7 @@ import { raster } from "../three/raster.js";
 import { Compositor } from "../compositor.js";
 import { collideParticle } from "./particle-collision.js";
 import { inverse, point } from "../geometry/matrix.js";
+import { frameIndex } from "../../eval/frames.js";
 /** @typedef {import('../../xsd/validate.js').ValidNode} Node */
 const presets = {
   smoke: {
@@ -105,6 +106,12 @@ const presets = {
     opacityEnd: 0,
   },
 };
+/** First burst particle id; continuous births (at most 200000) stay below it. */
+const BURST_IDS = 0x40000000;
+/** First random lane of asset-alpha rejection attempts, clear of the per-particle lanes 0-10. */
+const ASSET_LANES = 0x10000;
+/** Samples per second of the emitter transform grid used by force fields and collisions. */
+const GRID = 120;
 /** Stable independent random streams; no call-order-dependent RNG state.
  * @param {number} seed @param {number} id @param {number} lane */
 export function random(seed, id, lane) {
@@ -156,19 +163,25 @@ export function particleStates(node, time, attributes, context = {}) {
     }
     carry = next - Math.floor(next + 1e-10);
   }
+  // Burst ids live in their own namespace, fixed by document order, burst
+  // index, repeat and j, so they do not shift as continuous births accrue.
+  let burstBase = BURST_IDS;
   for (const burst of node.children.filter((n) => n.name === "burst")) {
-    const b = attributes(burst, time);
-    for (let repeat = 0; repeat <= Number(b.repeat ?? 0); repeat++) {
+    const b = attributes(burst, time),
+      n = Math.max(0, Math.ceil(Number(b.count ?? 0)) || 0),
+      repeats = Math.max(0, Math.floor(Number(b.repeat ?? 0)) || 0);
+    for (let repeat = 0; repeat <= repeats; repeat++) {
       const t =
         Number(a.start ?? 0) +
         Number(b.time ?? 0) +
         repeat * Number(b.interval ?? 0);
       if (t > time) break;
-      if (count + Number(b.count) > 200000)
-        throw new Error("particle birth budget exceeded");
-      for (let j = 0; j < Number(b.count); j++)
-        births.push({ time: t, id: count++ });
+      if (count + n > 200000) throw new Error("particle birth budget exceeded");
+      count += n;
+      for (let j = 0; j < n; j++)
+        births.push({ time: t, id: burstBase + repeat * n + j });
     }
+    burstBase += (repeats + 1) * n;
   }
   births.sort((a, b) => a.time - b.time || a.id - b.id);
   /** @type {Array<{x:number,y:number,vx:number,vy:number,size:number,rotation:number,age:number,life:number,q:number,id:number}>} */ const states =
@@ -214,11 +227,11 @@ export function particleStates(node, time, attributes, context = {}) {
     } else if (asset) {
       let accepted = false;
       for (let attempt = 0; attempt < 1024; attempt++) {
-        const px = Math.floor(rnd(3 + attempt * 3) * asset.width),
-          py = Math.floor(rnd(4 + attempt * 3) * asset.height);
+        const lane = ASSET_LANES + attempt * 3,
+          px = Math.floor(rnd(lane) * asset.width),
+          py = Math.floor(rnd(lane + 1) * asset.height);
         if (
-          rnd(5 + attempt * 3) <
-          Number(asset.data[(py * asset.width + px) * 4 + 3])
+          rnd(lane + 2) < Number(asset.data[(py * asset.width + px) * 4 + 3])
         ) {
           x = ((px + 0.5) / asset.width) * (w || asset.width);
           y = ((py + 0.5) / asset.height) * (h || asset.height);
@@ -363,8 +376,8 @@ export function renderParticles(node, host, matrix, paint) {
   };
   const fixtures = host.physics?.particleColliders() ?? [],
     matrices = new Map();
-  const matrixAt = (/** @type {number} */ local) => {
-    const global = rate ? (local - offset) / rate : host.time;
+  /** @param {number} global @returns {import('../geometry/matrix.js').Matrix} */
+  const exact = (global) => {
     if (global === host.time) return matrix;
     if (matrices.has(global)) return matrices.get(global);
     const before = host.time;
@@ -389,6 +402,19 @@ export function renderParticles(node, host, matrix, paint) {
     } finally {
       host.time = before;
     }
+  };
+  // Every particle steps from its own birth time, so step instants rarely
+  // repeat and a full layout pass per instant is prohibitive. Matrices are
+  // measured on a 1/120 s grid; where both ends of a grid cell agree the
+  // transform is taken as constant across the cell (exact for static and
+  // piecewise-static transforms), otherwise the instant is measured exactly.
+  const matrixAt = (/** @type {number} */ local) => {
+    const global = rate ? (local - offset) / rate : host.time;
+    if (global === host.time) return matrix;
+    const i = frameIndex(local, GRID),
+      m0 = exact((i / GRID - offset) / rate),
+      m1 = exact(((i + 1) / GRID - offset) / rate);
+    return m0.every((v, k) => v === m1[k]) ? m0 : exact(global);
   };
   const states = particleStates(node, time, attrs, {
     fields: host.scene.children
@@ -514,7 +540,7 @@ export function renderParticles(node, host, matrix, paint) {
       h = p.size;
     const cols = Number(a.spriteCols ?? 1),
       rows = Number(a.spriteRows ?? 1),
-      frame = Math.floor(p.age * Number(a.spriteFps ?? 0)) % (cols * rows),
+      frame = frameIndex(p.age, Number(a.spriteFps ?? 0)) % (cols * rows),
       u0 = atlas ? (frame % cols) / cols : 0,
       v0 = atlas ? Math.floor(frame / cols) / rows : 0,
       du = atlas ? 1 / cols : 1,

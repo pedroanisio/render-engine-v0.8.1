@@ -18,7 +18,8 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve, basename } from "node:path";
+import { dirname, join, resolve, basename, parse } from "node:path";
+import { framePosition } from "../eval/frames.js";
 import { fileDependencies } from "../assets.js";
 import { createRenderer } from "./setup.js";
 import { FramePool, defaultThreads } from "./frame-pool.js";
@@ -127,7 +128,9 @@ export async function renderEpisode(o) {
     const extra = [
       ...Object.entries(o.parameters ?? {}).flatMap(([k, v]) => [
         "--param",
-        `${k}=${String(v)}`,
+        // Lists/objects travel as JSON, which the shard's parameter parser reads back;
+        // scalars keep their text form, exactly what the parent's own parser sees.
+        `${k}=${typeof v === "object" && v !== null ? JSON.stringify(v) : String(v)}`,
       ]),
       ...(o.variant ? ["--variant", o.variant] : []),
       ...(o.anchorMode ? ["--anchor-mode", o.anchorMode] : []),
@@ -179,6 +182,7 @@ export async function renderEpisode(o) {
     sceneFile,
     base,
     sceneBytes,
+    reads,
     selected,
     runtime,
     scene,
@@ -213,10 +217,12 @@ export async function renderEpisode(o) {
     const work = mkdtempSync(join(cacheWork, "run-"));
     cleanupWork = work;
     const rangeFrom =
-      Math.ceil(Math.max(0, o.from ?? Number(oa.start ?? 0)) * fps) / fps;
+      Math.ceil(
+        framePosition(Math.max(0, o.from ?? Number(oa.start ?? 0)), fps),
+      ) / fps;
     const rangeTo = Math.min(
       duration,
-      Math.ceil((o.to ?? Number(oa.end ?? duration)) * fps) / fps,
+      Math.ceil(framePosition(o.to ?? Number(oa.end ?? duration), fps)) / fps,
     );
     if (rangeTo <= rangeFrom)
       throw new Error(
@@ -251,6 +257,10 @@ export async function renderEpisode(o) {
             variant: o.variant ?? selected?.attributes.variant,
             data: o.data,
             row: o.row,
+            representation: o.representation,
+            // Output attributes (alpha, colour space/transfer, burnt-in captions, ...)
+            // are read while frames render, so each output keeps its own segments.
+            output: { id: out.attributes.id, attributes: oa },
           },
           (_, v) => (typeof v === "bigint" ? String(v) : v),
         ),
@@ -313,6 +323,21 @@ export async function renderEpisode(o) {
         .filter((a) => a.name === "image")
         .map((a) => [String(a.attributes.id), String(a.attributes.src)]),
     );
+    // Attributes naming an image asset that a node draws from (besides <layer asset>).
+    /** @type {Record<string, string[]>} */
+    const imageReferences = {
+      layer: ["asset"],
+      particleEmitter: ["sprite", "emitterAsset"],
+    };
+    /** @type {Map<string, SceneNode>} */
+    const nodeIds = new Map();
+    /** @param {SceneNode} n */
+    const index = (n) => {
+      if (n.attributes.id !== undefined)
+        nodeIds.set(String(n.attributes.id), n);
+      for (const c of n.children) index(c);
+    };
+    index(composition);
     /** @param {SceneNode} n @returns {boolean} */
     const dynamicDependencies = (n) =>
       n.name === "object3D" ||
@@ -325,7 +350,9 @@ export async function renderEpisode(o) {
       n.children.some(
         (c) =>
           (["animate", "expression", "link"].includes(c.name) &&
-            c.attributes.property === "asset") ||
+            ["asset", "sprite", "emitterAsset"].includes(
+              String(c.attributes.property),
+            )) ||
           (c.name === "expression" &&
             String(c.value).includes("audioAmplitude")) ||
           (c.name === "link" &&
@@ -378,10 +405,19 @@ export async function renderEpisode(o) {
           );
         h.update(src).update(/** @type {string} */ (fileHash.get(src)));
       }
+      const walked = new Set();
       /** @param {SceneNode} n */
       const walk = (n) => {
-        if (n.name === "layer") {
-          const src = imageSrc.get(String(n.attributes.asset));
+        if (walked.has(n)) return;
+        walked.add(n);
+        // A track matte may be a node from another (non-overlapping) shot.
+        const matte =
+          n.attributes.matte === undefined
+            ? undefined
+            : nodeIds.get(String(n.attributes.matte));
+        if (matte) walk(matte);
+        for (const attribute of imageReferences[n.name] ?? []) {
+          const src = imageSrc.get(String(n.attributes[attribute]));
           if (src) {
             const file = join(base, src);
             if (!existsSync(file)) absent.push(src);
@@ -471,7 +507,7 @@ export async function renderEpisode(o) {
         }
       };
       if (threads > 1 && f1 - f0 > 1 && !pool)
-        pool = await new FramePool(o, threads).start();
+        pool = await new FramePool(o, threads, { sceneBytes, reads }).start();
       const frames = pool
         ? pool.frames(f0, f1, fps, renderer)
         : framesToEncode();
@@ -584,6 +620,8 @@ export async function renderEpisode(o) {
           work,
           duration,
           parameters: runtime.params,
+          // Include/data text the renderer compiled from, so the worker needs no disk reads.
+          reads,
           tracks: renderer.captionTracks,
           output: oa,
           start: exportStart,
@@ -652,7 +690,7 @@ export async function renderEpisode(o) {
         "-map",
         `${i + (plan.audio ? 2 : 1)}:s:0`,
         `-metadata:s:s:${i}`,
-        `language=${captionLanguage(String(track.attributes.language))}`,
+        `language=${captionLanguage(String(track.attributes.language), plan.container)}`,
         `-metadata:s:s:${i}`,
         `title=${String(track.attributes.label ?? track.attributes.id)}`,
         `-metadata:s:s:${i}`,
@@ -792,7 +830,7 @@ export async function renderEpisode(o) {
       );
     }
     if (accessibility && !plan.sequence && !plan.audioOnly) {
-      const report = accessibilityReport(
+      const report = await accessibilityReport(
         temporary,
         renderer,
         accessibility,
@@ -898,10 +936,13 @@ export async function renderEpisode(o) {
     for (const track of renderer.captionTracks) {
       if (ids.length && !ids.includes(String(track.attributes.id))) continue;
       if (track.attributes.mode === "burn") continue;
-      const p = video.replace(
-        /\.[^.]+$/,
-        `.${String(track.attributes.id)}.${String(track.attributes.language ?? "und")}.vtt`,
+      const parsed = parse(video);
+      const p = join(
+        parsed.dir,
+        `${parsed.name}.${String(track.attributes.id)}.${String(track.attributes.language ?? "und")}.vtt`,
       );
+      if (resolve(p) === resolve(video))
+        throw new Error("caption sidecar path would overwrite the video");
       writeAtomic(p, toVtt(clipCaptions(track, exportStart, exportEnd)));
       captions.push(p);
     }

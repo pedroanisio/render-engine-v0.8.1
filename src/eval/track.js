@@ -5,9 +5,8 @@
  * is a binary search plus one closed-form call, with typed interpolation and compile-time diagnostics for invalid combinations.
  */
 import { Codes, diagnostic } from '../diagnostics.js';
-import { MODEL } from '../generated/model.js';
 import { clocks } from './clock.js';
-import { propertyValue, interpolate, simple, spring } from './value.js';
+import { declaredAttribute, propertyValue, interpolate, simple, spring } from './value.js';
 import { cubicBezier, easing, UnsupportedCurve } from './curves.js';
 
 /** @typedef {import('../xsd/validate.js').ValidNode} SceneNode */
@@ -22,6 +21,7 @@ class TrackError extends Error {
   }
 }
 
+const UNIT = /^-?[\d.]+(%|vw|vh|vmin|vmax)$/;
 /** @param {number} a @param {number} m */
 const mod = (a, m) => ((a % m) + m) % m;
 
@@ -94,7 +94,11 @@ function compileTrack(animate, span, owner, timeline, resolve) {
       Number(k.attributes.time) +
       (k.attributes.marker === undefined ? 0 : timeline.marker(k.attributes.marker)),
   );
-  const type = MODEL.complexTypes[owner.type]?.attributes[prop]?.type ?? 'xs:double';
+  times.forEach((t, i) => {
+    if (!Number.isFinite(t))
+      throw new TrackError(Codes.ANIM_VALUE, `key time must be finite (key ${i + 1})`);
+  });
+  const type = declaredAttribute(owner.type, prop)?.type ?? 'xs:double';
   const values = keys.map((k) =>
     resolve(propertyValue(owner, prop, String(k.attributes.value)), type),
   );
@@ -192,7 +196,10 @@ function compileTrack(animate, span, owner, timeline, resolve) {
     const va = /** @type {import('./value.js').Value} */ (values[lo]);
     const vb = /** @type {import('./value.js').Value} */ (values[lo + 1]);
     let u = (t - ta) / (tb - ta);
-    if (!numeric && !color) return interpolate(va, vb, u);
+    // Discrete values (strings, booleans, IDs) switch at the next key; vectors and
+    // unit lengths interpolate and so take the segment's easing/hold/steps/spring.
+    if (!numeric && !color && !Array.isArray(va) && !(typeof va === 'string' && UNIT.test(va)))
+      return interpolate(va, vb, u);
     const ka = keys[lo],
       kb = keys[lo + 1];
     const attr = ka?.attributes ?? {};
@@ -249,7 +256,9 @@ function compileTrack(animate, span, owner, timeline, resolve) {
   /** @param {number} t @param {string} mode @param {boolean} before */
   const outside = (t, mode, before) => {
     if (mode === 'hold' || range === 0) return before ? v0 : vn;
-    if (mode === 'linear' && numeric) {
+    // Linear extrapolation is defined for numbers only; other values hold.
+    if (mode === 'linear' && !numeric) return before ? v0 : vn;
+    if (mode === 'linear') {
       let i = before ? 0 : n - 2;
       while (times[i] === times[i + 1] && (before ? i < n - 2 : i > 0)) i += before ? 1 : -1;
       if (times[i] === times[i + 1]) return before ? v0 : vn;
@@ -360,14 +369,16 @@ export function compileAnimations(scene) {
   const walk = (node) => {
     const anims = node.children.filter((c) => c.name === 'animate');
     if (anims.length) {
-      const declared = MODEL.complexTypes[node.type]?.attributes ?? {};
       const start = timeline.spans.get(node)?.start ?? 0;
       const end = timeline.spans.get(node)?.end ?? duration;
       const key = typeof node.attributes.id === 'string' ? node.attributes.id : node.path;
       for (const an of anims) {
         const prop = /** @type {string} */ (an.attributes.property);
         try {
-          if (!(prop in declared) && !(node.name === 'motionPath' && prop === 'progress'))
+          if (
+            !declaredAttribute(node.type, prop) &&
+            !(node.name === 'motionPath' && prop === 'progress')
+          )
             throw new TrackError(
               Codes.ANIM_PROPERTY,
               `<${node.name}> has no attribute "${prop}" to animate`,

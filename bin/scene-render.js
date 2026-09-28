@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { main, parseRenderArgs } from "../src/cli.js";
 
 const argv = process.argv.slice(2);
@@ -35,6 +35,7 @@ if (argv[0] === "render") {
   process.exitCode = main(argv, {
     readFile: (p) => readFileSync(p, "utf8"),
     readBytes: (p) => readFileSync(p),
+    realpath: (p) => realpathSync(p),
     stdout: (s) => process.stdout.write(s),
     stderr: (s) => process.stderr.write(s),
   });

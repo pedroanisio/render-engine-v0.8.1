@@ -474,7 +474,9 @@ export function capabilities(/** @type {Node} */ scene) {
         report(n, "param requires name and value");
       return;
     }
-    const allow = /** @type {Record<string,string>} */ (supported)[n.name];
+    const allow = Object.hasOwn(supported, n.name)
+      ? /** @type {Record<string,string>} */ (supported)[n.name]
+      : undefined;
     if (allow === undefined) {
       report(n, `<${n.name}> is not implemented by the render backend`);
       return;
@@ -482,7 +484,10 @@ export function capabilities(/** @type {Node} */ scene) {
     const attrs = new Set(allow.split(" "));
     for (const [k, v] of Object.entries(n.attributes))
       if (!attrs.has(k)) {
-        const def = MODEL.complexTypes[n.type]?.attributes[k];
+        const cdef = Object.hasOwn(MODEL.complexTypes, n.type)
+          ? MODEL.complexTypes[n.type]
+          : undefined;
+        const def = cdef && Object.hasOwn(cdef.attributes, k) ? cdef.attributes[k] : undefined;
         const parsed =
           def?.default === null || def?.default === undefined
             ? null

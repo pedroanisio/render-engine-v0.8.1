@@ -51,36 +51,33 @@ export function render3D(host) {
   const ca = active.at(-1) ? attrs(/** @type {Node} */ (active.at(-1))) : {},
     vw = host.width / host.scale,
     vh = host.height / host.scale;
+  // fov is horizontal (CONVENTIONS 2.2/2.3): focal length in pixels spans vw/2
   const fov = Number(ca.fov ?? 60),
     focal =
       ca.focalLength === undefined
-        ? vh / 2 / Math.tan((fov * Math.PI) / 360)
+        ? vw / 2 / Math.tan((fov * Math.PI) / 360)
         : (Number(ca.focalLength) * vw) / Number(ca.sensorWidth ?? 36);
   if (!(fov > 0 && fov < 180))
     throw new Error("camera fov must be between 0 and 180 degrees");
+  // explicit camera x/y/z are absolute; the implicit camera maps z = 0 onto the
+  // frame pixel for pixel from (W/2, H/2, −focal)
   const eye = /** @type {Vec} */ (
     active.length
       ? [Number(ca.x ?? 0), Number(ca.y ?? 0), Number(ca.z ?? 0)]
-      : [0, 0, -focal]
+      : [vw / 2, vh / 2, -focal]
   );
-  let right = rotate(
-      [1, 0, 0],
-      Number(ca.pitch ?? 0),
+  // R = R_yaw·R_pitch·R_roll (roll first): +yaw looks right, +pitch looks up,
+  // +roll turns the camera clockwise
+  const orient = (/** @type {Vec} */ v) =>
+    rotate(
+      rotate(rotate(v, 0, 0, Number(ca.roll ?? 0)), Number(ca.pitch ?? 0), 0, 0),
+      0,
       Number(ca.yaw ?? 0),
-      Number(ca.roll ?? 0),
-    ),
-    down = rotate(
-      [0, 1, 0],
-      Number(ca.pitch ?? 0),
-      Number(ca.yaw ?? 0),
-      Number(ca.roll ?? 0),
-    ),
-    forward = rotate(
-      [0, 0, 1],
-      Number(ca.pitch ?? 0),
-      Number(ca.yaw ?? 0),
-      Number(ca.roll ?? 0),
+      0,
     );
+  let right = orient([1, 0, 0]),
+    down = orient([0, 1, 0]),
+    forward = orient([0, 0, 1]);
   if (ca.target) {
     const target = ids.get(String(ca.target));
     if (!target) throw new Error("camera target must be an object3D");
@@ -145,7 +142,13 @@ export function render3D(host) {
       const key = String(a.mesh);
       geometry = host.geometryCache.get(key);
       if (!geometry) {
-        geometry = importedGeometry(host.io.meshes?.get(key));
+        geometry = importedGeometry(
+          host.io.meshes?.get(key),
+          Number(
+            host.scene.children.find((n) => n.name === "physics")?.attributes
+              .pixelsPerMeter ?? 100,
+          ),
+        );
         host.geometryCache.set(key, geometry);
       }
     } else geometry = primitive(a);

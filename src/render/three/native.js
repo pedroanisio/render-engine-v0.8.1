@@ -237,9 +237,8 @@ export function cyclesFrame(host) {
           primitive: "textured-plane",
           width: textureBox.width,
           height: textureBox.height,
-          x: center.x / host.scale - (parent3D ? 0 : Number(project.width) / 2),
-          y:
-            center.y / host.scale - (parent3D ? 0 : Number(project.height) / 2),
+          x: center.x / host.scale,
+          y: center.y / host.scale,
           z: Number(a.zDepth ?? 0),
           rotation: (Math.atan2(world[1], world[0]) * 180) / Math.PI,
           scaleX: Math.hypot(world[0], world[1]) / host.scale,
@@ -412,6 +411,10 @@ export function cyclesFrame(host) {
         height: host.height,
         projectWidth: Number(project.width),
         projectHeight: Number(project.height),
+        pixelsPerMeter: Number(
+          host.scene.children.find((n) => n.name === "physics")?.attributes
+            .pixelsPerMeter ?? 100,
+        ),
         time: host.time,
         seed: Number(BigInt(String(project.seed ?? 0)) % 2147483647n),
         quality: project.quality,

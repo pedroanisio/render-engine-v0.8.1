@@ -1,4 +1,3 @@
-import { checkAnchorMode } from "./compatibility.js";
 import { SurfaceCache } from "./cache.js";
 /**
  * Scene walk for one instant: evaluates animated properties, orders children by
@@ -32,7 +31,6 @@ import { drawRotated, ellipseMask, rain } from "./effects.js";
 /**
  * @typedef {object} AssetIo
  * @property {(src:string)=>string} [path]
- * @property {'pivot'|'position'} [anchorMode]
  * @property {Map<string,any>} [meshes]
  * @property {Map<string,{src:string,sha256:string}[]>} [meshDependencies]
  * @property {(src: string) => Uint8Array} read file bytes by scene-relative path
@@ -55,9 +53,7 @@ export class FrameRenderer {
    * @param {ReturnType<import('../eval/runtime.js').compileRuntime>} [runtime]
    */
   constructor(scene, tracks, io, scale, runtime) {
-    checkAnchorMode(scene, io.anchorMode);
     this.scene = scene;
-    this.anchorMode = io.anchorMode ?? "pivot";
     this.suppressText = false;
     this.captureContrast = false;
     /** @type {Array<{id:string,pixels:number[]}>} */ this.contrastChecks = [];
@@ -711,8 +707,8 @@ export class FrameRenderer {
         {
           px: ax * s,
           py: ay * s,
-          dx: (ox + this.num(n, "x", 0) + ax) * s,
-          dy: (oy + this.num(n, "y", 0) + ay) * s,
+          dx: (ox + this.num(n, "x", 0)) * s,
+          dy: (oy + this.num(n, "y", 0)) * s,
           sx,
           sy,
           deg,
@@ -722,8 +718,9 @@ export class FrameRenderer {
       );
       return;
     }
-    const x = ox + this.num(n, "x", 0) + ax * (1 - sx);
-    const y = oy + this.num(n, "y", 0) + ay * (1 - sy);
+    // x/y place the anchor point: the source's top-left lands at x − anchorX·scaleX
+    const x = ox + this.num(n, "x", 0) - ax * sx;
+    const y = oy + this.num(n, "y", 0) - ay * sy;
     dst.drawSurface(src, x * s, y * s, sx, sy, this.num(n, "opacity", 1), clip);
   }
 

@@ -242,14 +242,7 @@ export class Compositor {
       this.boxes.set(n, b);
       const local = multiply(
         fit,
-        transform(
-          { ...at, x: b.x, y: b.y },
-          b.width,
-          b.height,
-          this.vw,
-          this.vh,
-          this.host.anchorMode,
-        ),
+        transform({ ...at, x: b.x, y: b.y }, pw, ph, this.vw, this.vh),
       );
       this.locals.set(n, local);
       const m = multiply(parent, local);
@@ -266,17 +259,11 @@ export class Compositor {
     const parent = this.nodes.get(String(node.attributes.parent)),
       b = this.boxes.get(node);
     if (parent && b) {
-      const a = this.attrs(node);
+      const a = this.attrs(node),
+        pb = this.boxes.get(parent) ?? { width: this.vw, height: this.vh };
       return multiply(
         this.world(parent, stack),
-        transform(
-          { ...a, x: b.x, y: b.y },
-          b.width,
-          b.height,
-          this.vw,
-          this.vh,
-          this.host.anchorMode,
-        ),
+        transform({ ...a, x: b.x, y: b.y }, pb.width, pb.height, this.vw, this.vh),
       );
     }
     const container = this.parents.get(node);
@@ -437,7 +424,7 @@ export class Compositor {
         ).path;
       const local = multiply(
         m,
-        transform(a, w, h, this.vw, this.vh, this.host.anchorMode),
+        transform(a, box.width, box.height, this.vw, this.vh),
       );
       /** @type {Mask} */ let current = this.coverage(p, local);
       current = this.feather(

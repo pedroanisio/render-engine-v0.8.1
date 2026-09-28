@@ -36,8 +36,11 @@ shadows disabled. Cycles 4.5.0 CPU handles PBR, nested geometry, text/path
 extrusion, bevel, instancing, projected 2D surfaces, DOF, panoramas and imported
 animation. The runtime versions participate in output cache identity.
 
-World coordinates are X right, Y down, Z away from an unrotated camera. One
-scene unit is one pixel; the native adapter uses 100 pixels/metre. Primitives
+World coordinates are the frame's pixel space extended into depth: origin at
+the frame's top-left corner on z = 0, X right, Y down, Z away from an unrotated
+camera. One scene unit is one pixel; the native adapter uses 100 pixels/metre.
+Imported models are Y-up metres: a model point (x, y, z) becomes
+(100·x, −100·y, −100·z) with `physics/@pixelsPerMeter` (default 100). Primitives
 are centred. A plane uses width/height; a sphere uses radius; a cylinder/cone
 uses radius/height; capsule height is the straight section; torus depth is tube
 diameter. Segments are limited to 3–256. Instances share geometry and transforms
@@ -46,9 +49,10 @@ budget. Parent transforms, opacity and visibility propagate through the tree.
 
 Perspective and orthographic cameras support clipping, target, yaw/pitch/roll,
 focal length, sensor dimensions, focus distance/target, f-stop, aperture blades,
-exposure, radial distortion and seeded shake. FOV is vertical; focal length uses
-a sensor gate cropped to the output aspect ratio. Both sensor dimensions
-participate when focalLength is supplied. Explicit FOV remains vertical. The last active camera wins unless `viewportCamera`
+exposure, radial distortion and seeded shake. FOV is horizontal (60° for the
+implicit camera, which sits at (W/2, H/2, −(W/2)/tan 30°)); camera x/y/z are
+absolute positions. Rotation is R_yaw·R_pitch·R_roll: positive yaw looks right,
+positive pitch looks up, positive roll turns the camera clockwise. The last active camera wins unless `viewportCamera`
 selects one. Shutter integration samples the scene at output FPS, including
 per-node and inherited `motionBlur="off"`. Cycles draft/final quality uses 16/48
 samples multiplied by `antialias3d`.

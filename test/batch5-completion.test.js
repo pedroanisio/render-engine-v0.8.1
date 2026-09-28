@@ -111,8 +111,9 @@ function render(xml, io = { read: () => new Uint8Array() }) {
 }
 const mats =
   '<materials><material id="red" unlit="true" baseColor="#ff0000"/><material id="green" unlit="true" baseColor="#00ff00"/></materials>';
+// scene space has its origin at the frame's top-left: (20, 20) is the centre of the 40×40 frame
 const obj = (id, extra = "") =>
-  `<object3D id="${id}" primitive="plane" width="20" height="20" material="red" castShadow="false" receiveShadow="false" ${extra}/>`;
+  `<object3D id="${id}" primitive="plane" width="20" height="20" material="red" castShadow="false" receiveShadow="false" ${/\bx=/.test(extra) ? "" : 'x="20" '}${/\by=/.test(extra) ? "" : 'y="20" '}${extra}/>`;
 const pixel = (s, x, y) =>
   Array.from(s.data.slice((y * s.width + x) * 4, (y * s.width + x) * 4 + 4));
 test("3D stack shares depth, respects 2D interleaving and isolated group opacity/masks", () => {
@@ -160,7 +161,7 @@ test("3D stack shares depth, respects 2D interleaving and isolated group opacity
 test("3D parenting projects a 2D layer and native shadow visibility can animate", () => {
   const r = render(
     scene(
-      obj("parent", 'x="-10" visible="false"') +
+      obj("parent", 'x="10" visible="false"') +
         '<shape id="label" parent="parent" x="0" y="0" width="8" height="8" shape="rect" fill="#00ff00"/>',
       mats,
     ),
@@ -170,7 +171,7 @@ test("3D parenting projects a 2D layer and native shadow visibility can animate"
   assert.ok(s.data.every(Number.isFinite));
   const moving = render(
     scene(
-      obj("parent", 'x="-8"') +
+      obj("parent", 'x="12"') +
         '<shape id="label" parent="parent" x="0" y="0" width="8" height="8" shape="rect" fill="#00ff00"/>',
       mats,
     ),
@@ -544,17 +545,22 @@ test("native 3D group effects and geometry mattes remain isolated from sibling o
   assert.equal(pixel(a, 0, 0)[3], 0);
   assert.ok(a.data.filter((v, i) => i % 4 === 0).every((v) => v < 0.001));
 });
-test("native camera parenting and physical sensor height affect projection", () => {
+test("native camera parenting and physical sensor width affect projection; fov stays horizontal", () => {
   const body =
-    obj("parent", 'x="8"') +
-    '<group id="rig" x="8"><camera id="cam" z="-50" focalLength="35" sensorWidth="36" sensorHeight="24"/></group>';
+    obj("parent", 'x="28"') +
+    '<group id="rig" x="28"><camera id="cam" y="20" z="-50" focalLength="35" sensorWidth="36" sensorHeight="24"/></group>';
   const a = render(scene(body, mats)).render(0),
     b = render(
-      scene(body.replace('sensorHeight="24"', 'sensorHeight="12"'), mats),
+      scene(body.replace('sensorWidth="36"', 'sensorWidth="18"'), mats),
     ).render(0),
     c = render(
-      scene(body.replace('id="rig" x="8"', 'id="rig" x="0"'), mats),
+      scene(body.replace('id="rig" x="28"', 'id="rig" x="20"'), mats),
+    ).render(0),
+    // fov = 2·atan(sensorWidth / (2·focalLength)): sensorHeight does not change it
+    d = render(
+      scene(body.replace('sensorHeight="24"', 'sensorHeight="12"'), mats),
     ).render(0);
   assert.notDeepEqual(a.data, b.data);
   assert.notDeepEqual(a.data, c.data);
+  assert.deepEqual(a.data, d.data);
 });

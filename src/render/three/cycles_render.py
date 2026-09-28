@@ -1,4 +1,6 @@
-"""Cycles CPU adapter. Scene units are pixels; 100 pixels equal one metre."""
+"""Cycles CPU adapter. Scene units are pixels (origin top-left on z=0, +x right, +y down, +z away);
+Blender coordinates are scene*U with y and z negated. Imported models are Y-up metres scaled by
+pixelsPerMeter (CONVENTIONS 2.6)."""
 import json, math, sys, os
 from pathlib import Path
 import bpy
@@ -19,10 +21,17 @@ scene.render.film_transparent=True
 scene.render.image_settings.file_format='OPEN_EXR';scene.render.image_settings.color_depth='32';scene.render.image_settings.color_mode='RGBA'
 scene.view_settings.view_transform='Standard';scene.view_settings.look='None';scene.view_settings.exposure=0;scene.view_settings.gamma=1
 U=0.01
+# Model metres -> Blender units: a model point g enters scene space as ppm*(gx,-gy,-gz), i.e. Blender ppm*U*g.
+K=float(request.get('pixelsPerMeter',100))*U
 scene.render.fps=max(1,round(float(request.get('fps',24))))
 
 def vec(a): return Vector((float(a.get('x',0))*U,-float(a.get('y',0))*U,-float(a.get('z',a.get('zDepth',0)))*U))
-def rotation(a,camera=False): return Euler((math.radians(float(a.get('pitch' if camera else 'rotationX',0))),-math.radians(float(a.get('yaw' if camera else 'rotationY',0))),-math.radians(float(a.get('roll' if camera else 'rotation',0)))),'XYZ')
+# Scene rotations conjugated into Blender axes: Rx keeps its sign, Ry and Rz flip.
+# Objects: M = Rz·Ry·Rx ('XYZ'). Cameras/lights: R = R_yaw·R_pitch·R_roll, roll first ('ZXY'),
+# returned as the equivalent 'XYZ' Euler so the objects keep Blender's default rotation mode.
+def rotation(a,camera=False):
+    e=Euler((math.radians(float(a.get('pitch' if camera else 'rotationX',0))),-math.radians(float(a.get('yaw' if camera else 'rotationY',0))),-math.radians(float(a.get('roll' if camera else 'rotation',0)))),'ZXY' if camera else 'XYZ')
+    return e.to_matrix().to_euler('XYZ') if camera else e
 def node(nt,kind): return nt.nodes.new(kind)
 def link(nt,a,b): nt.links.new(a,b)
 def color(a,key,default): return tuple(a.get(key,default))
@@ -136,7 +145,7 @@ def animated_import(a):
     bpy.context.view_layer.update();deps=bpy.context.evaluated_depsgraph_get();baked=[]
     for ob in imported:
         if ob.type=='MESH':
-            evaluated=ob.evaluated_get(deps);data=bpy.data.meshes.new_from_object(evaluated,preserve_all_data_layers=True,depsgraph=deps);data.transform(ob.matrix_world);data.transform(Matrix(((U,0,0,0),(0,0,-U,0),(0,U,0,0),(0,0,0,1))) if extension in ('.gltf','.glb') or (extension in ('.usd','.usda','.usdc','.usdz') and a.get('geometry',{}).get('upAxis')=='Y') else Matrix.Diagonal((U,-U,-U,1)));copy=bpy.data.objects.new('Baked mesh',data);scene.collection.objects.link(copy);baked.append(copy)
+            evaluated=ob.evaluated_get(deps);data=bpy.data.meshes.new_from_object(evaluated,preserve_all_data_layers=True,depsgraph=deps);data.transform(ob.matrix_world);data.transform(Matrix(((K,0,0,0),(0,0,K,0),(0,-K,0,0),(0,0,0,1))) if extension in ('.gltf','.glb','.fbx','.usd','.usda','.usdc','.usdz') else Matrix.Diagonal((K,K,K,1)));copy=bpy.data.objects.new('Baked mesh',data);scene.collection.objects.link(copy);baked.append(copy)
     for ob in imported:bpy.data.objects.remove(ob,do_unlink=True)
     if not baked:raise ValueError('animated asset contains no mesh')
     bpy.ops.object.select_all(action='DESELECT')
@@ -166,7 +175,8 @@ def mesh_import(a):
                 mesh=source['meshes'][index];offset=len(verts);raw=mesh['vertices'];verts.extend([tuple(matrix@Vector(raw[i:i+3])) for i in range(0,len(raw),3)]);faces.extend([[offset+i for i in face] for face in mesh['faces']]);slots.extend([mesh.get('materialindex',0)]*len(mesh['faces']));channel=next(iter(mesh.get('texturecoords',[])),[]);stride=3 if len(channel)==len(raw) else 2;uvs.extend([tuple(channel[i*stride:i*stride+2]) if channel else (0,0) for face in mesh['faces'] for i in face])
             for child in n.get('children',[]):visit(child,matrix)
         visit(source['rootnode'],Matrix.Identity(4))
-    data=bpy.data.meshes.new(a['id']);data.from_pydata([(p[0]*U,-p[1]*U,-p[2]*U) for p in verts],[],faces);data.update();uv=data.uv_layers.new()
+    zup=source.get('format')=='usd' and str(source.get('upAxis'))=='Z'
+    data=bpy.data.meshes.new(a['id']);data.from_pydata([(p[0]*K,p[2]*K,-p[1]*K) if zup else (p[0]*K,p[1]*K,p[2]*K) for p in verts],[],faces);data.update();uv=data.uv_layers.new()
     for loop,value in zip(uv.data,uvs):loop.uv=value
     for mat in imported_materials:data.materials.append(mat)
     for poly,index in zip(data.polygons,slots):poly.material_index=index
@@ -295,14 +305,14 @@ if receivers:
             duplicate=lamp.copy();duplicate.data=lamp.data.copy();duplicate.data.use_shadow=False;scene.collection.objects.link(duplicate);duplicate.light_linking.receiver_collection=unshadowed;lamp.light_linking.receiver_collection=shadowed
 # Cameras use the last active declaration.
 a=next((c for c in request['cameras'] if c['id']==request.get('viewportCamera')),request['cameras'][-1] if request['cameras'] else {})
-f=request['projectHeight']/2/math.tan(math.radians(float(a.get('fov',60)))/2)
+f=request['projectWidth']/2/math.tan(math.radians(float(a.get('fov',60)))/2)  # fov is horizontal
 data=bpy.data.cameras.new('Camera');cam=bpy.data.objects.new('Camera',data);scene.collection.objects.link(cam);scene.camera=cam
-cam.location=vec(a) if request['cameras'] else Vector((0,0,f*U));cam.rotation_euler=rotation(a,True)
+cam.location=vec(a) if request['cameras'] else Vector((request['projectWidth']/2*U,-request['projectHeight']/2*U,f*U));cam.rotation_euler=rotation(a,True)
 if a.get('parent'):cam.parent=objects[str(a['parent'])]
 if a.get('target'):
     bpy.context.view_layer.update();target=objects[str(a['target'])].matrix_world.translation;look=(target-cam.matrix_world.translation).to_track_quat('-Z','Y');cam.rotation_euler=(cam.parent.matrix_world.to_quaternion().inverted()@look if cam.parent else look).to_euler();cam.rotation_euler.rotate_axis('Z',-math.radians(float(a.get('roll',0))))
 data.type='ORTHO' if a.get('projection')=='orthographic' else 'PERSP';data.clip_start=float(a.get('near',0.1))*U;data.clip_end=float(a.get('far',10000))*U
-data.sensor_fit='VERTICAL' if a.get('focalLength') and float(a.get('sensorHeight',24))/request['projectHeight']<float(a.get('sensorWidth',36))/request['projectWidth'] else 'HORIZONTAL';data.sensor_width=float(a.get('sensorWidth',36));data.sensor_height=float(a.get('sensorHeight',24));data.lens=float(a['focalLength']) if a.get('focalLength') else f*data.sensor_width/request['projectWidth'];data.ortho_scale=float(a.get('orthoHeight',request['projectHeight']))*request['projectWidth']/request['projectHeight']*U
+data.sensor_fit='HORIZONTAL';data.sensor_width=float(a.get('sensorWidth',36));data.sensor_height=float(a.get('sensorHeight',24));data.lens=float(a['focalLength']) if a.get('focalLength') else f*data.sensor_width/request['projectWidth'];data.ortho_scale=float(a.get('orthoHeight',request['projectHeight']))*request['projectWidth']/request['projectHeight']*U
 data.lens*=float(a.get('zoomFactor',1));cam.rotation_euler.rotate_axis('Z',math.radians(float(a.get('shakeRotation',0))))
 data.dof.use_dof=bool(a.get('depthOfField',False));data.dof.aperture_fstop=float(a.get('fStop',2.8));data.dof.aperture_blades=int(a.get('apertureBlades',0));data.dof.focus_distance=float(a.get('focusDistance',1000))*U
 if a.get('focusTarget'):data.dof.focus_object=objects[str(a['focusTarget'])]

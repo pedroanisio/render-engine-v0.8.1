@@ -89,9 +89,11 @@ export function primitive(a) {
   return { points, triangles };
 }
 /** Convert static Assimp/OpenUSD triangle geometry while retaining hierarchy transforms.
+ * Every mesh format is Y-up metres (CONVENTIONS 2.6): a model point (gx, gy, gz)
+ * enters scene space as (ppm·gx, −ppm·gy, −ppm·gz); Z-up USD is first turned to Y-up.
  * Imported material, animation and splat data require separate backends; fail explicitly.
- * @param {any} mesh @returns {Geometry} */
-export function importedGeometry(mesh) {
+ * @param {any} mesh @param {number} [ppm] scene pixels per metre (physics/@pixelsPerMeter) @returns {Geometry} */
+export function importedGeometry(mesh, ppm = 100) {
   /** @type {Geometry} */ const out = { points: [], triangles: [] };
   if (!mesh || mesh.format === "splat")
     throw new Error("object3D requires a triangle mesh");
@@ -158,6 +160,10 @@ export function importedGeometry(mesh) {
     if (!mesh.rootnode) throw new Error("mesh hierarchy is missing");
     visit(mesh.rootnode, (p) => p);
   }
+  const zUp = mesh.format === "usd" && String(mesh.upAxis) === "Z";
+  out.points = out.points.map(([x, y, z]) =>
+    zUp ? [ppm * x, -ppm * z, ppm * y] : [ppm * x, -ppm * y, -ppm * z],
+  );
   if (out.points.some((p) => p.some((v) => !Number.isFinite(v))))
     throw new Error("non-finite mesh geometry");
   if (out.triangles.length > 100000)

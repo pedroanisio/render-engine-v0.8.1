@@ -11,7 +11,7 @@ import { parseRenderArgs } from "../src/cli.js";
 import { renderEpisode } from "../src/render/pipeline.js";
 import { processRun } from "../src/render/process.js";
 
-test("position anchors register the pivot at x/y through nested, rotated, reflected transforms", () => {
+test("x/y place the anchor through nested, rotated, reflected transforms", () => {
   for (const rotation of [0, 30, 90, -70])
     for (const scaleX of [-2, 1, 3]) {
       const a = {
@@ -24,7 +24,7 @@ test("position anchors register the pivot at x/y through nested, rotated, reflec
         scaleY: 0.5,
         skewX: 20,
       };
-      const m = transform(a, 100, 100, 100, 100, "position");
+      const m = transform(a, 100, 100, 100, 100);
       const p = point(m, 12, 8);
       assert.ok(Math.abs(p.x - 60) < 1e-9 && Math.abs(p.y - 40) < 1e-9);
       const parent = transform(
@@ -33,7 +33,6 @@ test("position anchors register the pivot at x/y through nested, rotated, reflec
         100,
         100,
         100,
-        "position",
       );
       const nested = point(multiply(parent, m), 12, 8),
         expected = point(parent, 60, 40);
@@ -41,11 +40,17 @@ test("position anchors register the pivot at x/y through nested, rotated, reflec
         Math.abs(nested.x - expected.x) < 1e-9 &&
           Math.abs(nested.y - expected.y) < 1e-9,
       );
-      const legacy = point(transform(a, 100, 100, 100, 100), 12, 8);
-      assert.ok(
-        Math.abs(legacy.x - 72) < 1e-9 && Math.abs(legacy.y - 48) < 1e-9,
-      );
     }
+  // without rotation or scale the local origin sits at x − anchorX, y − anchorY
+  assert.deepEqual(
+    point(
+      transform({ x: 60, y: 40, anchorX: 12, anchorY: 8 }, 100, 100, 100, 100),
+      0,
+      0,
+    ),
+    { x: 48, y: 32 },
+  );
+  // % anchors and positions resolve against the parent box (200 × 100)
   const p = point(
     transform(
       { x: "50%", y: "50%", anchorX: "10%", anchorY: "20%" },
@@ -53,7 +58,6 @@ test("position anchors register the pivot at x/y through nested, rotated, reflec
       100,
       200,
       100,
-      "position",
     ),
     20,
     20,
@@ -61,21 +65,19 @@ test("position anchors register the pivot at x/y through nested, rotated, reflec
   assert.deepEqual(p, { x: 100, y: 50 });
 });
 
-test("anchor compatibility rejects unknown modes and incompatible dynamics", () => {
-  assert.equal(
-    parseRenderArgs(["x.xml", "--anchor-mode", "position"]).options.anchorMode,
-    "position",
-  );
+test("the removed pivot anchor mode is rejected; position is a no-op", () => {
+  const position = parseRenderArgs(["x.xml", "--anchor-mode", "position"]);
+  assert.equal(position.ok, true);
+  assert.equal(position.options.anchorMode, undefined);
+  assert.equal(parseRenderArgs(["x.xml", "--anchor-mode", "pivot"]).ok, false);
   assert.equal(parseRenderArgs(["x.xml", "--anchor-mode", "guess"]).ok, false);
-  assert.throws(() => checkAnchorMode({ children: [] }, "guess"), /anchorMode/);
-  for (const name of ["object3D", "rigidBody", "deform", "scene360"])
-    assert.throws(
-      () => checkAnchorMode({ name, attributes: {}, children: [] }, "position"),
-      /requires a 2D/,
-    );
+  assert.throws(() => checkAnchorMode("pivot"), /no longer supported/);
+  assert.throws(() => checkAnchorMode("guess"), /no longer supported/);
+  checkAnchorMode(undefined);
+  checkAnchorMode("position");
 });
 
-test("anchor mode changes decoded pixels, invalidates cache, and reaches workers and stills", async () => {
+test("anchors place x/y in decoded pixels, workers and stills; pivot mode is refused", async () => {
   const dir = mkdtempSync(join(tmpdir(), "anchors-")),
     file = join(dir, "scene.xml");
   writeFileSync(
@@ -94,18 +96,17 @@ test("anchor mode changes decoded pixels, invalidates cache, and reaches workers
       "rgb24",
       "-",
     ]);
-  const pivot = await renderEpisode({ sceneFile: file });
-  const old = bytes(pivot.video);
-  const position = await renderEpisode({
-    sceneFile: file,
-    anchorMode: "position",
-  });
-  const expected = bytes(position.video);
-  assert.ok(position.rendered > 0);
-  assert.notDeepEqual(old, expected);
+  await assert.rejects(
+    renderEpisode({ sceneFile: file, anchorMode: "pivot" }),
+    /no longer supported/,
+  );
+  const first = await renderEpisode({ sceneFile: file });
+  const expected = bytes(first.video);
+  assert.ok(first.rendered > 0);
+  // the group's anchor (20,10) lands on x/y (20,10): its origin is the frame's
   assert.ok(expected[(10 * 64 + 10) * 3] > 200);
-  assert.equal(old[(10 * 64 + 10) * 3], 0);
-  const still = await sharp(position.posters[0]).removeAlpha().raw().toBuffer();
+  assert.equal(expected[(10 * 64 + 30) * 3], 0);
+  const still = await sharp(first.posters[0]).removeAlpha().raw().toBuffer();
   assert.ok(still[(10 * 64 + 10) * 3] >= 254);
   const parallel = await renderEpisode({
     sceneFile: file,
@@ -115,9 +116,8 @@ test("anchor mode changes decoded pixels, invalidates cache, and reaches workers
   });
   assert.deepEqual(bytes(parallel.video), expected);
   assert.equal(
-    JSON.parse(readFileSync(parallel.video + ".assets.json")).compatibility
-      .anchorMode,
-    "position",
+    JSON.parse(readFileSync(parallel.video + ".assets.json")).compatibility,
+    undefined,
   );
   const warm = await renderEpisode({ sceneFile: file, anchorMode: "position" });
   assert.equal(warm.rendered, 0);

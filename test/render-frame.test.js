@@ -118,7 +118,7 @@ test("applies group effects and masks, shape glow, rain and rotation", () => {
       <shape id="seam" shape="rect" x="24" y="0" width="1" height="16" fill="#E3BC48" effects="halo"/>
       <particleEmitter id="rain1" preset="rain" start="0" end="10" x="16" y="0" emitterWidth="8" emitterHeight="16" rate="200"
         lifetime="1" speed="20" direction="90" spread="0" size="1" trail="0.1" color="#FFFFFF" seed="1" preroll="1" maxParticles="500" shape="streak"/>
-      <layer id="rot" asset="red" x="0" y="0" anchorX="4" anchorY="4" rotation="45" z="9"/>
+      <layer id="rot" asset="red" x="4" y="4" anchorX="4" anchorY="4" rotation="45" z="9"/>
     </composition>
     <effects><effect id="grain" type="film-grain" amount="0.1" seed="3" mix="1"/><effect id="tone" type="halftone" size="4" angle="45" mix="0.2"/>
       <effect id="lines" type="scanlines" size="2" intensity="0.5" mix="1"/><effect id="halo" type="glow" radius="4" intensity="1" color="#E3BC48"/>

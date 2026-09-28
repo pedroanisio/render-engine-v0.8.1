@@ -7,21 +7,31 @@ import {
   transform,
   inverse,
   point,
+  length,
 } from "../geometry/matrix.js";
 /** @typedef {import('../../xsd/validate.js').ValidNode} Node */
 /** @typedef {import('../geometry/matrix.js').Matrix} Matrix */
-/** @param {Matrix} m */
-export function decompose(m) {
+/**
+ * Decomposes a local-to-parent matrix M = T(x,y)·R·S·T(−anchor) back into
+ * authored attributes: x/y are the image of the anchor point (0,0 by default).
+ * @param {Matrix} m @param {{x:number,y:number}} [anchor]
+ */
+export function decompose(m, anchor = { x: 0, y: 0 }) {
   const scaleX = Math.hypot(m[0], m[1]),
     det = m[0] * m[3] - m[1] * m[2];
   return {
-    x: m[4],
-    y: m[5],
+    x: m[4] + m[0] * anchor.x + m[2] * anchor.y,
+    y: m[5] + m[1] * anchor.x + m[3] * anchor.y,
     rotation: (Math.atan2(m[1], m[0]) * 180) / Math.PI,
     scaleX,
     scaleY: scaleX ? det / scaleX : Math.hypot(m[2], m[3]),
   };
 }
+/** Local anchor of authored attributes, as `transform(a, 1, 1, 1, 1)` resolves it. @param {Record<string,any>} a */
+const anchorOf = (a) => ({
+  x: length(a.anchorX ?? 0, 1, 1, 1),
+  y: length(a.anchorY ?? 0, 1, 1, 1),
+});
 export class Constraints {
   /** @param {Node} scene @param {(n:Node,t:number)=>Record<string,any>} attributes @param {import('./tracking.js').Tracking} tracking @param {(n:Node,t:number)=>number} [localTime] */
   constructor(
@@ -71,7 +81,10 @@ export class Constraints {
             parent = this.ids.get(String(first.parent)),
             base = parent ? this.world(parent, time, stack) : IDENTITY,
             origin = point(base, Number(first.x ?? 0), Number(first.y ?? 0)),
-            goal = decompose(this.world(target, time, stack)),
+            goal = decompose(
+              this.world(target, time, stack),
+              anchorOf(this.raw(target, time)),
+            ),
             dx = Number(goal.x) - origin.x + Number(ca.offsetX ?? 0),
             dy = Number(goal.y) - origin.y + Number(ca.offsetY ?? 0),
             l1 = Number(first.length),
@@ -124,12 +137,21 @@ export class Constraints {
         inv = inverse(parentWorld);
       if (!inv) throw new Error("singular constraint parent");
       const ownWorld = multiply(parentWorld, transform(a, 1, 1, 1, 1)),
-        own = decompose(ownWorld);
-      const t = target
-        ? local
-          ? this.attributes(target, time, stack)
-          : decompose(this.world(target, time, stack))
-        : undefined;
+        own = decompose(ownWorld, anchorOf(a));
+      // the target's matrix in its own parent space (local) or world space
+      const targetMatrix = target
+          ? local
+            ? transform(this.attributes(target, time, stack), 1, 1, 1, 1)
+            : this.world(target, time, stack)
+          : undefined,
+        t = target
+          ? local
+            ? this.attributes(target, time, stack)
+            : decompose(
+                /** @type {Matrix} */ (targetMatrix),
+                anchorOf(this.raw(target, time)),
+              )
+          : undefined;
       if (ca.type === "track") {
         const value = this.tracking.sample(
           String(ca.target),
@@ -177,8 +199,14 @@ export class Constraints {
         desired.x = dst.x;
         desired.y = dst.y;
       } else if (ca.type === "parent") {
-        const m = multiply(transform(t, 1, 1, 1, 1), transform(a, 1, 1, 1, 1));
-        desired = { ...a, ...decompose(local ? m : multiply(inv, m)) };
+        const m = multiply(
+          /** @type {Matrix} */ (targetMatrix),
+          transform(a, 1, 1, 1, 1),
+        );
+        desired = {
+          ...a,
+          ...decompose(local ? m : multiply(inv, m), anchorOf(a)),
+        };
       } else if (
         [
           "copy-position",
@@ -188,7 +216,12 @@ export class Constraints {
         ].includes(String(ca.type))
       ) {
         const tr = /** @type {Record<string,any>} */ (
-          local ? t : decompose(multiply(inv, transform(t, 1, 1, 1, 1)))
+          local
+            ? t
+            : decompose(
+                multiply(inv, /** @type {Matrix} */ (targetMatrix)),
+                anchorOf(this.raw(/** @type {Node} */ (target), time)),
+              )
         );
         for (const key of ca.type === "copy-position"
           ? ["x", "y"]

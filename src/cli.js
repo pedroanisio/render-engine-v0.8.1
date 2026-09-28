@@ -14,7 +14,7 @@ const USAGE =
   "       scene-render preflight [--json] <scene.xml>\n" +
   "usage: scene-render validate [--json] <scene.xml>\n" +
   "       scene-render assets [--json] <scene.xml>\n" +
-  "       scene-render render <scene.xml> [--output ID] [--anchor-mode pivot|position] [--scale N] [--from S] [--to S] [--work DIR] [--jobs N] [--threads N] [--gpu auto|off|on] [--available yes]\n";
+  "       scene-render render <scene.xml> [--output ID] [--scale N] [--from S] [--to S] [--work DIR] [--jobs N] [--threads N] [--gpu auto|off|on] [--available yes]\n";
 
 /**
  * Parses `render` arguments; returns an error message for invalid input.
@@ -108,13 +108,16 @@ export function parseRenderArgs(args) {
   }
   if (flags.representation !== undefined)
     options.representation = flags.representation;
-  if (flags["anchor-mode"] !== undefined) {
-    if (!["pivot", "position"].includes(flags["anchor-mode"]))
-      return { ok: false, error: "--anchor-mode must be pivot or position" };
-    options.anchorMode = /** @type {'pivot'|'position'} */ (
-      flags["anchor-mode"]
-    );
-  }
+  // x/y always place the 2D anchor; "position" is accepted as a no-op
+  if (
+    flags["anchor-mode"] !== undefined &&
+    flags["anchor-mode"] !== "position"
+  )
+    return {
+      ok: false,
+      error:
+        "--anchor-mode pivot is no longer supported (x/y always place the anchor)",
+    };
   if (flags.output !== undefined) options.outputId = flags.output;
   if (Object.keys(parameters).length) options.parameters = parameters;
   if (flags.variant !== undefined) options.variant = flags.variant;

@@ -206,21 +206,31 @@ export class Physics {
       ? this.worldMatrix(parent, time)
       : IDENTITY;
   }
+  /** The box `%` lengths of `node` resolve against: its parent's box, or the frame. @param {Node} node @param {number} time */
+  parentBox(node, time) {
+    const a = this.attrs(node, time),
+      parent = this.ids.get(String(a.parent)) ?? this.parents.get(node),
+      project =
+        this.scene.children.find((n) => n.name === "project")?.attributes ?? {},
+      frame = {
+        width: Number(project.width ?? 1),
+        height: Number(project.height ?? 1),
+      };
+    return {
+      box:
+        parent && !["scene", "composition"].includes(parent.name)
+          ? this.dimensions(parent)
+          : frame,
+      frame,
+    };
+  }
   /** @param {Node} node @param {number} time @returns {import('../geometry/matrix.js').Matrix} */
   worldMatrix(node, time) {
     const a = this.attrs(node, time),
-      size = this.dimensions(node),
-      project =
-        this.scene.children.find((n) => n.name === "project")?.attributes ?? {};
+      { box, frame } = this.parentBox(node, time);
     return multiply(
       this.parentMatrix(node, time),
-      transform(
-        a,
-        size.width,
-        size.height,
-        Number(project.width ?? 1),
-        Number(project.height ?? 1),
-      ),
+      transform(a, box.width, box.height, frame.width, frame.height),
     );
   }
   /** Convert solved world-space geometry back to authored parent/anchor coordinates. @param {Node} node @param {number} time */
@@ -236,14 +246,15 @@ export class Physics {
       world = multiply([c, s, -s, c, pose.x, pose.y], linear),
       local = multiply(parent, world),
       a = this.attrs(node, time),
-      size = this.dimensions(node);
-    const ax = length(a.anchorX ?? 0, size.width, size.width, size.height),
-      ay = length(a.anchorY ?? 0, size.height, size.width, size.height),
+      { box, frame } = this.parentBox(node, time);
+    // M = T(x,y)·L·T(−anchor), so x = e + L·anchor (anchor % of the parent box)
+    const ax = length(a.anchorX ?? 0, box.width, frame.width, frame.height),
+      ay = length(a.anchorY ?? 0, box.height, frame.width, frame.height),
       result = decompose(local);
     return {
       ...result,
-      x: local[4] - ax + local[0] * ax + local[2] * ay,
-      y: local[5] - ay + local[1] * ax + local[3] * ay,
+      x: local[4] + local[0] * ax + local[2] * ay,
+      y: local[5] + local[1] * ax + local[3] * ay,
       skewX:
         (Math.atan2(
           local[0] * local[2] + local[1] * local[3],

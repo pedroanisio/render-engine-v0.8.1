@@ -62,7 +62,7 @@ function render(
   return { surface: renderer.render(t), renderer, runtime, source };
 }
 const noFiles = { read: () => new Uint8Array() };
-test('affine inverse, units and pivot contracts', () => {
+test('affine inverse, units and anchor contracts (x/y place the anchor)', () => {
   for (const [u, n] of [
     ['50%', 10],
     ['10vw', 10],
@@ -76,8 +76,8 @@ test('affine inverse, units and pivot contracts', () => {
   assert.equal(inverse([0, 0, 0, 0, 0, 0]), null);
   const m = transform(
     {
-      x: 4,
-      y: 2,
+      x: 6,
+      y: 5,
       anchorX: 2,
       anchorY: 3,
       rotation: 90,

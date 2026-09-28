@@ -47,23 +47,21 @@ export function length(value, parent, vw, vh) {
             : Math.max(vw, vh))
   );
 }
-/** @param {Record<string,any>} a @param {number} w @param {number} h @param {number} vw @param {number} vh @param {'pivot'|'position'} [anchorMode] @returns {Matrix} */
-export function transform(a, w, h, vw, vh, anchorMode = "pivot") {
-  const x = length(a.x ?? 0, w, vw, vh),
-    y = length(a.y ?? 0, h, vw, vh),
-    ax = length(a.anchorX ?? 0, w, vw, vh),
-    ay = length(a.anchorY ?? 0, h, vw, vh),
+/**
+ * Local-to-parent matrix M = T(x,y)·R·Skew·S·T(−anchor): x/y place the anchor
+ * point in the parent's space and rotation/scale pivot about it. `%` lengths
+ * (x, y, anchorX, anchorY) resolve against the PARENT box (pw × ph).
+ * @param {Record<string,any>} a @param {number} pw @param {number} ph @param {number} vw @param {number} vh @returns {Matrix}
+ */
+export function transform(a, pw, ph, vw, vh) {
+  const x = length(a.x ?? 0, pw, vw, vh),
+    y = length(a.y ?? 0, ph, vw, vh),
+    ax = length(a.anchorX ?? 0, pw, vw, vh),
+    ay = length(a.anchorY ?? 0, ph, vw, vh),
     r = (Number(a.rotation ?? 0) * Math.PI) / 180,
     c = Math.cos(r),
     s = Math.sin(r);
-  let m = /** @type {Matrix} */ ([
-    1,
-    0,
-    0,
-    1,
-    x + (anchorMode === "pivot" ? ax : 0),
-    y + (anchorMode === "pivot" ? ay : 0),
-  ]);
+  let m = /** @type {Matrix} */ ([1, 0, 0, 1, x, y]);
   m = multiply(m, [c, s, -s, c, 0, 0]);
   m = multiply(m, [
     1,

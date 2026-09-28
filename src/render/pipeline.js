@@ -47,7 +47,7 @@ import { metadataFile, offsetTimecode } from "./export-metadata.js";
 import { destinationPlan, deliver } from "./delivery.js";
 import { stillBytes } from "./stills.js";
 
-export const RENDERER_VERSION = "13";
+export const RENDERER_VERSION = "14";
 
 /** @typedef {import('../xsd/validate.js').ValidNode} SceneNode */
 
@@ -55,7 +55,7 @@ export const RENDERER_VERSION = "13";
  * @typedef {object} RenderOptions
  * @property {Record<string, import('../eval/value.js').Value>} [parameters]
  * @property {string} [variant]
- * @property {'pivot'|'position'} [anchorMode] explicit 2D anchor convention
+ * @property {'position'} [anchorMode] deprecated no-op: x/y always place the 2D anchor; other values are rejected
  * @property {string} [data]
  * @property {number} [row]
  * @property {AbortSignal} [signal]
@@ -136,7 +136,6 @@ export async function renderEpisode(o) {
         `${k}=${typeof v === "object" && v !== null ? JSON.stringify(v) : String(v)}`,
       ]),
       ...(o.variant ? ["--variant", o.variant] : []),
-      ...(o.anchorMode ? ["--anchor-mode", o.anchorMode] : []),
       ...(o.data ? ["--data", o.data] : []),
       ...(o.row !== undefined ? ["--row", String(o.row)] : []),
       ...(o.outputId ? ["--output", o.outputId] : []),
@@ -275,7 +274,6 @@ export async function renderEpisode(o) {
         JSON.stringify(
           {
             parameters: runtime.params,
-            anchorMode: o.anchorMode ?? "pivot",
             variant: o.variant ?? selected?.attributes.variant,
             data: o.data,
             row: o.row,
@@ -1120,7 +1118,6 @@ export async function renderEpisode(o) {
         scene,
         anim.tracks,
         {
-          anchorMode: o.anchorMode,
           path: (p) => assetPath(base, p),
           read: media.read,
           media: media.render,
@@ -1156,7 +1153,6 @@ export async function renderEpisode(o) {
       JSON.stringify(
         {
           renderer: RENDERER_VERSION,
-          compatibility: { anchorMode: o.anchorMode ?? "pivot" },
           encoder: encoderVersion,
           output: {
             ...plan,

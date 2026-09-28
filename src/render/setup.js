@@ -80,7 +80,7 @@ export async function createRenderer(o, snapshot) {
     },
   );
   const scene = runtime.scene;
-  checkAnchorMode(scene, o.anchorMode);
+  checkAnchorMode(o.anchorMode);
   analyze = createAudioAnalysis(scene, base);
   const unsupported = capabilities(scene);
   if (unsupported.length)
@@ -162,7 +162,6 @@ export async function createRenderer(o, snapshot) {
       scene,
       runtime.tracks,
       {
-        anchorMode: o.anchorMode,
         path: (p) => assetPath(base, p),
         read: media.read,
         media: media.render,

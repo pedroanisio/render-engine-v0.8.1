@@ -17,9 +17,11 @@ See [the export contract](docs/export-operation.md) and
 limits. `examples/batch7/` contains MP4, animated WebP, an alpha master, float EXR
 and four still formats produced by the engine.
 
-The compatibility option `--anchor-mode position` supports source projects whose
-x/y place their 2D anchor. Default pivot behavior remains unchanged. Parallel
-workers, cache keys, stills and reports preserve the selected convention.
+2D and 3D space follow the conventions shared by every scene-render
+implementation (scene-render-conformance/CONVENTIONS.md): x/y place a node's
+anchor point, and 3D scene space is the frame's pixel space extended into depth.
+The former `--anchor-mode pivot` convention was removed; `--anchor-mode position`
+is still accepted as a no-op.
 
 `npm run certify` produces an item-level evidence report and returns exit code 2
 while full certification is incomplete. See [the certification status](docs/batch7-status.json).

@@ -7,7 +7,8 @@ floating-point RGBA. The encoded MP4 is still the existing H.264 backend.
 
 ## Geometry and coordinate spaces
 
-Transforms are `T(x + anchor) R(rotation) skew S(scale) T(-anchor)`, composed
+Transforms are `T(x, y) R(rotation) skew S(scale) T(-anchor)`, so x/y place the
+anchor point; percentage anchors resolve against the parent box. They are composed
 through the hierarchy. Negative scales mirror geometry; singular transforms
 produce no coverage. Explicit `parent` references replace the containing
 node's transform parent, while drawing order stays in the containing group.

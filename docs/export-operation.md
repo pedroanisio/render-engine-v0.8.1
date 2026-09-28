@@ -200,11 +200,9 @@ measured evidence and outstanding certification limits.
 
 ## Compatibility and evidence updates
 
-`--anchor-mode pivot` (default) retains the established transform convention.
-`--anchor-mode position` places a 2D anchor at x/y, including animated values.
-It is explicit and recorded in the report/cache; it is never inferred from an
-input filename. Physics/deformation/constraints/3D scenes reject this compatibility
-mode. Both modes are checked analytically and against decoded frame/still pixels.
+x/y always place the 2D anchor (CONVENTIONS 1.1); `--anchor-mode pivot` is
+rejected and `--anchor-mode position` is accepted as a no-op. The convention is
+checked analytically and against decoded frame/still pixels.
 
 Multi-output calls return `outputs` for every individual export, aggregate stills
 and captions, and retain `video` as the last output for API compatibility. Duplicate

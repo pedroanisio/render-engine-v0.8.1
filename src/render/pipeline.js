@@ -212,7 +212,6 @@ export async function renderEpisode(o) {
     mkdirSync(cacheWork, { recursive: true });
     const work = mkdtempSync(join(cacheWork, "run-"));
     cleanupWork = work;
-    const threads = o.threads ?? (o.shard ? 1 : defaultThreads());
     const rangeFrom =
       Math.ceil(Math.max(0, o.from ?? Number(oa.start ?? 0)) * fps) / fps;
     const rangeTo = Math.min(
@@ -226,6 +225,13 @@ export async function renderEpisode(o) {
     const encodedDuration = Math.round((rangeTo - rangeFrom) * fps) / fps;
     if (encodedDuration <= 0)
       throw new Error("output range contains no complete frame");
+    // Worker threads pay for their own renderer set-up, so unless asked for
+    // they only serve renders of at least a second of frames; shards stay serial.
+    const threads =
+      o.threads ??
+      (o.shard || Math.round(encodedDuration * fps) < 24
+        ? 1
+        : defaultThreads());
     const finalCodecArgs = videoArguments(oa, fps, encodedDuration, W, H);
     checkEncoding(oa, fps, encodedDuration, W, H, work);
     const sceneHash = createHash("sha256")

@@ -114,7 +114,31 @@ referenced by the scene.
 npx scene-render render scene.xml
 npx scene-render render scene.xml --from 10 --to 20
 npx scene-render render scene.xml --jobs 4
+npx scene-render render scene.xml --threads 1
 ```
+
+### Performance
+
+Frames are rendered by the same compositor and effect code as before, but each
+pass now touches only the pixels a layer can reach (surfaces and masks carry a
+zero-region hint), the hot loops allocate nothing per pixel, static text is
+reused across frames, and the 16-bit encoder quantises float32 values through
+a table that `scripts/verify-encode-lut.mjs` checks against the direct
+computation for every float32 in [0, 1]. Output is byte-identical to the
+previous release: lossless segment digests are unchanged, so existing segment
+caches stay valid. Single-thread frame throughput is 8 to 15 times higher on
+the bundled examples and a 1080p reference scene;
+`node scripts/bench-frames.mjs <scene.xml> [output] [start] [frames]` measures
+it for any scene.
+
+Renders of a second or more of frames also spread frames over worker threads
+(`--threads N`, default: half the cores, at most four, and no more renderers
+than free memory holds; `--threads 1` restores the serial path). Every thread
+holds its own renderer and decoded media, so memory grows with the count, and
+shard processes started by `--jobs` stay serial unless `--threads` is given.
+Frames are independent of rendering order, as stills and shards already rely
+on, so threaded output is identical to serial output. FFprobe results are
+cached in the OS temp directory by file identity and probe version.
 
 Partial exports split segments at the requested interval, rounded upward to frame boundaries.
 Audio samples and caption/word times are rebased to the same exported interval. Output is

@@ -141,6 +141,14 @@ The raster cache uses a 128 MiB LRU budget. Production audio stems spill to disk
 with a 128 MiB in-memory cache; active mix/DSP buffers still require memory
 proportional to project duration and channels. The existing 200-million-sample
 per-buffer limit remains. Canvas/output budgets are 32 megapixels; jobs are 1–32.
+Threads are 1–32: `--threads N` renders the frames of each segment on N worker
+threads, each holding its own renderer and decoded media, and feeds them to the
+segment encoder in order; by default a render of at least 24 frames uses half the
+cores, at most four and no more renderers than free memory holds, shard processes
+use one, and `--threads 1` selects the serial path. Frames do not depend on
+rendering order, so segment digests are identical either way. FFprobe results are
+cached in the OS temp directory (`scene-render-probe-cache.json`), keyed by the
+absolute path, size, modification time and ffprobe version.
 Work storage must have room for lossless intermediates and audio stems.
 
 `renderEpisode({signal})` and CLI SIGINT/SIGTERM cancel active encoding/audio

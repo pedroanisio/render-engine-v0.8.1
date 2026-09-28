@@ -5,11 +5,12 @@ import { FrameRenderer } from "../src/render/frame.js";
 import { needsCycles, cyclesInfo } from "../src/render/three/native.js";
 const source = (body, materials = "", sections = "", project = "") =>
   `<scene version="1.1"><project width="48" height="32" duration="2" fps="8" quality="draft" background="#00000000" ${project}/>${materials ? `<materials>${materials}</materials>` : ""}${sections.startsWith("<scene360") ? sections : ""}<composition>${body}</composition>${sections.startsWith("<scene360") ? "" : sections}</scene>`;
+// Scene space has its origin at the frame's top-left (CONVENTIONS 2.1): objects, lights and cameras sit at the 48x32 frame centre.
 const obj = (extra = "", children = "") =>
-  `<object3D id="o" primitive="sphere" radius="9" material="m" ${extra}>${children}</object3D>`;
+  `<object3D id="o" primitive="sphere" radius="9" x="24" y="16" material="m" ${extra}>${children}</object3D>`;
 const mat = (extra = "") => `<material id="m" baseColor="#E06020" ${extra}/>`;
 const lamp =
-  '<lights><light id="l" type="point" x="-20" y="-30" z="-35" intensity="1"/></lights>';
+  '<lights><light id="l" type="point" x="4" y="-14" z="-35" intensity="1"/></lights>';
 function renderer(xml, io = {}) {
   const p = prepareScene(xml);
   assert.ok(p.ok, JSON.stringify(p.diagnostics));
@@ -61,7 +62,7 @@ test("native primitives, extruded paths, text and bevel create visible silhouett
           : "";
     const s = render(
       source(
-        `<object3D id="o" primitive="${primitive}" width="18" height="18" radius="8" depth="4" bevel="0.5" segments="12" material="m" ${details}/>`,
+        `<object3D id="o" primitive="${primitive}" x="24" y="16" width="18" height="18" radius="8" depth="4" bevel="0.5" segments="12" material="m" ${details}/>`,
         mat('unlit="true"'),
       ),
     );
@@ -95,28 +96,28 @@ test("lighting and physical material controls change rendered radiance", () => {
       source(
         obj(),
         mat(),
-        `<lights><light id="l" type="${type}" x="0" y="0" z="-30" width="30" height="30" spotAngle="90"/></lights>`,
+        `<lights><light id="l" type="${type}" x="24" y="16" z="-30" width="30" height="30" spotAngle="90"/></lights>`,
       ),
     );
     assert.ok(sum(s) > 0, type);
   }
 });
 test("native DOF, lens distortion, shake, hierarchy, constraints and shutter sampling are observable", () => {
-  const camera = '<camera id="c" z="-45"/>';
+  const camera = '<camera id="c" x="24" y="16" z="-45"/>';
   const base = render(source(camera + obj(), mat('unlit="true"')));
   for (const extra of [
     'depthOfField="true" focusDistance="10" fStop="0.5"',
     'lensDistortion="0.8"',
   ]) {
     const s = render(
-      source(`<camera id="c" z="-45" ${extra}/>${obj()}`, mat('unlit="true"')),
+      source(`<camera id="c" x="24" y="16" z="-45" ${extra}/>${obj()}`, mat('unlit="true"')),
     );
     assert.ok(s.data.every(Number.isFinite));
     assert.notDeepEqual(s.data, base.data);
   }
   const shaken = renderer(
     source(
-      `<camera id="c" z="-45"><shake amplitude="8" seed="4"/></camera>${obj()}`,
+      `<camera id="c" x="24" y="16" z="-45"><shake amplitude="8" seed="4"/></camera>${obj()}`,
       mat('unlit="true"'),
     ),
   );
@@ -127,7 +128,7 @@ test("native DOF, lens distortion, shake, hierarchy, constraints and shutter sam
   assert.notDeepEqual(nested.data, base.data);
   const constrained = render(
     source(
-      `${camera}<object3D id="target" primitive="sphere" x="10" visible="false"/>${obj("", '<transformConstraint type="copy-position" target="target"/>')}`,
+      `${camera}<object3D id="target" primitive="sphere" x="34" y="16" visible="false"/>${obj("", '<transformConstraint type="copy-position" target="target"/>')}`,
       mat('unlit="true"'),
     ),
   );

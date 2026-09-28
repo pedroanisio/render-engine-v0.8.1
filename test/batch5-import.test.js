@@ -1,3 +1,4 @@
+// Imported meshes are Y-up metres scaled by 100 px/m (CONVENTIONS 2.6); scale 0.01 keeps these unit-sized test meshes at their original pixel size, centred in the 48x32 frame.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
@@ -133,7 +134,7 @@ test("glTF named clips, morph targets and material variants survive real native 
   const bytes = Buffer.from(JSON.stringify(gltf()));
   const render = (extra, time = 0) => {
     const p = prepareScene(
-      `<scene version="1.1"><project width="48" height="32" fps="8" duration="2" quality="draft" background="#00000000"/><assets><mesh id="asset" src="mesh.gltf"/></assets><composition><object3D id="o" primitive="mesh" mesh="asset" ${extra}/></composition></scene>`,
+      `<scene version="1.1"><project width="48" height="32" fps="8" duration="2" quality="draft" background="#00000000"/><assets><mesh id="asset" src="mesh.gltf"/></assets><composition><object3D id="o" primitive="mesh" mesh="asset" x="24" y="16" scaleX="0.01" scaleY="0.01" scaleZ="0.01" ${extra}/></composition></scene>`,
     );
     assert.ok(p.ok, JSON.stringify(p.diagnostics));
     const r = new FrameRenderer(
@@ -321,7 +322,7 @@ test("spherical MP4 metadata preserves decodability and records stereo in ffprob
 test("imported glTF skinning moves only the vertices weighted to the animated joint", () => {
   const bytes = Buffer.from(JSON.stringify(gltf(true))),
     p = prepareScene(
-      '<scene version="1.1"><project width="48" height="32" fps="8" duration="2" quality="draft" background="#00000000"/><assets><mesh id="asset" src="skin.gltf"/></assets><composition><object3D id="o" primitive="mesh" mesh="asset" animationClip="move"/></composition></scene>',
+      '<scene version="1.1"><project width="48" height="32" fps="8" duration="2" quality="draft" background="#00000000"/><assets><mesh id="asset" src="skin.gltf"/></assets><composition><object3D id="o" primitive="mesh" mesh="asset" x="24" y="16" scaleX="0.01" scaleY="0.01" scaleZ="0.01" animationClip="move"/></composition></scene>',
     );
   assert.ok(p.ok, JSON.stringify(p.diagnostics));
   const r = new FrameRenderer(
@@ -354,7 +355,7 @@ test("imported glTF skinning moves only the vertices weighted to the animated jo
 test("static glTF keeps imported material slots without requiring animation flags", () => {
   const bytes = Buffer.from(JSON.stringify(gltf())),
     p = prepareScene(
-      '<scene version="1.1"><project width="48" height="32" fps="8" duration="1" quality="draft"/><assets><mesh id="asset" src="static.gltf"/></assets><composition><object3D id="o" primitive="mesh" mesh="asset"/></composition></scene>',
+      '<scene version="1.1"><project width="48" height="32" fps="8" duration="1" quality="draft"/><assets><mesh id="asset" src="static.gltf"/></assets><composition><object3D id="o" primitive="mesh" mesh="asset" x="24" y="16" scaleX="0.01" scaleY="0.01" scaleZ="0.01"/></composition></scene>',
     );
   assert.ok(p.ok, JSON.stringify(p.diagnostics));
   const r = new FrameRenderer(
@@ -383,7 +384,8 @@ test("static Assimp material slots, UVs and audited textures survive the native 
     meshes: [
       {
         vertices: [-10, -10, 0, 10, -10, 0, 10, 10, 0, -10, 10, 0],
-        faces: [[0, 3, 2, 1]],
+        // counter-clockwise in Y-up: the +z face looks at the implicit camera (CONVENTIONS 2.6)
+        faces: [[0, 1, 2, 3]],
         texturecoords: [[0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]],
         materialindex: 0,
       },
@@ -399,7 +401,7 @@ test("static Assimp material slots, UVs and audited textures survive the native 
     ],
   };
   const p = prepareScene(
-    '<scene version="1.1"><project width="48" height="32" fps="8" duration="1" quality="draft"/><assets><mesh id="asset" src="mesh.dae"/></assets><composition><object3D id="o" primitive="mesh" mesh="asset"/></composition></scene>',
+    '<scene version="1.1"><project width="48" height="32" fps="8" duration="1" quality="draft"/><assets><mesh id="asset" src="mesh.dae"/></assets><composition><object3D id="o" primitive="mesh" mesh="asset" x="24" y="16" scaleX="0.01" scaleY="0.01" scaleZ="0.01"/></composition></scene>',
   );
   assert.ok(p.ok, JSON.stringify(p.diagnostics));
   const s = new FrameRenderer(
@@ -468,7 +470,7 @@ def Xform "Root" {
     const read = (src) => readFileSync(join(dir, src)),
       g = await importMesh("mesh.usda", read("mesh.usda"), read, file);
     const p = prepareScene(
-      '<scene version="1.1"><project width="48" height="32" fps="8" duration="1" quality="draft"/><assets><mesh id="asset" src="mesh.usda"/></assets><composition><object3D id="o" primitive="mesh" mesh="asset"/></composition></scene>',
+      '<scene version="1.1"><project width="48" height="32" fps="8" duration="1" quality="draft"/><assets><mesh id="asset" src="mesh.usda"/></assets><composition><object3D id="o" primitive="mesh" mesh="asset" x="24" y="16" scaleX="0.01" scaleY="0.01" scaleZ="0.01"/></composition></scene>',
     );
     assert.ok(p.ok, JSON.stringify(p.diagnostics));
     const r = new FrameRenderer(

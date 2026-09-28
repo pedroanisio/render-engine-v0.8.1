@@ -29,6 +29,9 @@ if (argv[0] === "render") {
     } finally {
       process.off("SIGINT", cancel);
       process.off("SIGTERM", cancel);
+      // Safety net: native bindings (WebGPU, workers) must not keep a finished
+      // render alive. The timer does not hold the process open by itself.
+      setTimeout(() => process.exit(process.exitCode ?? 0), 10000).unref();
     }
   }
 } else {

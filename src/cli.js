@@ -14,7 +14,7 @@ const USAGE =
   "       scene-render preflight [--json] <scene.xml>\n" +
   "usage: scene-render validate [--json] <scene.xml>\n" +
   "       scene-render assets [--json] <scene.xml>\n" +
-  "       scene-render render <scene.xml> [--output ID] [--anchor-mode pivot|position] [--scale N] [--from S] [--to S] [--work DIR] [--jobs N] [--threads N] [--available yes]\n";
+  "       scene-render render <scene.xml> [--output ID] [--anchor-mode pivot|position] [--scale N] [--from S] [--to S] [--work DIR] [--jobs N] [--threads N] [--gpu auto|off|on] [--available yes]\n";
 
 /**
  * Parses `render` arguments; returns an error message for invalid input.
@@ -42,6 +42,7 @@ export function parseRenderArgs(args) {
           "--work",
           "--jobs",
           "--threads",
+          "--gpu",
           "--shard",
           "--available",
           "--param",
@@ -88,6 +89,11 @@ export function parseRenderArgs(args) {
     if (!Number.isInteger(n) || n < 1 || n > 32)
       return { ok: false, error: "--threads must be an integer from 1 to 32" };
     options.threads = n;
+  }
+  if (flags.gpu !== undefined) {
+    if (!["auto", "off", "on"].includes(flags.gpu))
+      return { ok: false, error: "--gpu must be auto, off or on" };
+    options.gpu = /** @type {"auto"|"off"|"on"} */ (flags.gpu);
   }
   if (flags.shard !== undefined) {
     const m = /^(\d+)\/(\d+)$/.exec(flags.shard);
@@ -139,7 +145,10 @@ export function parseRenderArgs(args) {
 
 /** @param {string} rel */
 const escapes = (rel) =>
-  rel === ".." || rel.startsWith(`..${sep}`) || rel.startsWith("../") || isAbsolute(rel);
+  rel === ".." ||
+  rel.startsWith(`..${sep}`) ||
+  rel.startsWith("../") ||
+  isAbsolute(rel);
 
 /**
  * Resolves `uri` against the scene directory, refusing remote/absolute URIs
@@ -148,30 +157,51 @@ const escapes = (rel) =>
  * @returns {{ ok: true, path: string } | { ok: false, remote: boolean, reason: string }}
  */
 export function containedPath(io, dir, uri) {
-  if (!uri || /^[a-z][a-z0-9+.-]*:/i.test(uri) || isAbsolute(uri) || uri.startsWith("/"))
+  if (
+    !uri ||
+    /^[a-z][a-z0-9+.-]*:/i.test(uri) ||
+    isAbsolute(uri) ||
+    uri.startsWith("/")
+  )
     return { ok: false, remote: true, reason: "remote or absolute URI" };
   const path = join(dir, uri);
   if (escapes(relative(resolve(dir), resolve(path))))
-    return { ok: false, remote: false, reason: "resolves outside the scene directory" };
+    return {
+      ok: false,
+      remote: false,
+      reason: "resolves outside the scene directory",
+    };
   if (io.realpath) {
     let root, real;
     try {
       root = io.realpath(dir || ".");
-      for (let probe = path; ; ) {
+      for (let probe = path; ;) {
         try {
           real = io.realpath(probe);
           break;
         } catch (e) {
           const up = dirname(probe);
-          if (/** @type {{ code?: string }} */ (e).code !== "ENOENT" || up === probe) throw e;
+          if (
+            /** @type {{ code?: string }} */ (e).code !== "ENOENT" ||
+            up === probe
+          )
+            throw e;
           probe = up;
         }
       }
     } catch (e) {
-      return { ok: false, remote: false, reason: `cannot resolve: ${message(e)}` };
+      return {
+        ok: false,
+        remote: false,
+        reason: `cannot resolve: ${message(e)}`,
+      };
     }
     if (escapes(relative(root, real)))
-      return { ok: false, remote: false, reason: "resolves outside the scene directory through a symlink" };
+      return {
+        ok: false,
+        remote: false,
+        reason: "resolves outside the scene directory through a symlink",
+      };
   }
   return { ok: true, path };
 }

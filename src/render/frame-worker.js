@@ -5,6 +5,8 @@
  */
 import { parentPort, workerData } from "node:worker_threads";
 import { createRenderer } from "./setup.js";
+import { contrastFrame } from "./accessibility.js";
+import { gpuDevice, gpuFrame } from "./gpu.js";
 
 const port = parentPort;
 if (!port) throw new Error("frame worker requires a parent port");
@@ -17,10 +19,44 @@ try {
     workerData.snapshot,
   );
   const floatFrames = plan.codec === "exr-sequence";
-  port.on("message", (m) => {
+  // The GPU tail finishes and encodes frames where it can (--gpu).
+  const gpu =
+    (workerData.options.gpu ?? "auto") !== "off" && !floatFrames
+      ? await gpuDevice()
+      : undefined;
+  port.on("message", async (m) => {
     if (m.type === "render") {
       try {
-        const frame = renderer.render(m.time);
+        const done = gpu
+          ? await gpuFrame(
+              renderer,
+              gpu,
+              m.time,
+              oa.alpha === true,
+              !!m.contrast,
+            )
+          : undefined;
+        if (done) {
+          port.postMessage(
+            {
+              type: "frame",
+              id: m.id,
+              bytes: done.bytes.buffer,
+              byteOffset: done.bytes.byteOffset,
+              length: done.bytes.length,
+              unsupported: [...renderer.unsupported],
+              warnings: [...renderer.warnings],
+              contrast: done.contrast,
+            },
+            [/** @type {ArrayBuffer} */ (done.bytes.buffer)],
+          );
+          return;
+        }
+        // With a contrast check the frame is measured as it renders.
+        const measured = m.contrast
+            ? contrastFrame(renderer, m.time)
+            : undefined,
+          frame = measured?.picture ?? renderer.render(m.time);
         const bytes = floatFrames
           ? renderer.color.encodeFloat(frame, oa.alpha === true)
           : renderer.color.encode16(frame, oa.alpha === true);
@@ -33,6 +69,7 @@ try {
             length: bytes.length,
             unsupported: [...renderer.unsupported],
             warnings: [...renderer.warnings],
+            contrast: measured?.contrast,
           },
           [bytes.buffer],
         );

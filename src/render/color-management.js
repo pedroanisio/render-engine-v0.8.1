@@ -162,8 +162,20 @@ const HALF_BITS = new Float64Array(1),
   HALF_HIGH = LITTLE_ENDIAN ? 1 : 0,
   HALF_STEPS = new Float64Array(64);
 for (let k = -34; k < 30; k++) HALF_STEPS[k + 34] = 2 ** k;
+/** Round-to-nearest-even binary16, saturating at ±65504 (no infinities).
+ * `Math.f16round` gives the same result natively where the runtime has it.
+ * @type {(x:number)=>number} */
+const half =
+  typeof (/** @type {any} */ (Math).f16round) === "function"
+    ? (x) =>
+        x === 0
+          ? x
+          : /** @type {any} */ (Math).f16round(
+              Math.max(-65504, Math.min(65504, x)),
+            )
+    : halfPortable;
 /** @param {number} x */
-function half(x) {
+function halfPortable(x) {
   if (x === 0) return x;
   const sign = Math.sign(x),
     v = Math.min(65504, Math.abs(x));
@@ -414,6 +426,46 @@ export class ColorPipeline {
       throw new Error(`View ${view} requires ocioConfig`);
     matrix(display); // Validate the display primaries; Surface remains canonical linear sRGB.
     return out;
+  }
+  /**
+   * Finish and encode16 parameters for the GPU frame tail (gpu.js), when this
+   * pipeline's finish is the plain quantisation and its encode a verified
+   * transfer; undefined for OCIO, looks, tonemapping, other working spaces or
+   * transfers, which keep the CPU path.
+   * @param {boolean} preserveAlpha
+   * @returns {import('./gpu.js').GpuPlan|undefined}
+   */
+  gpuPlan(preserveAlpha) {
+    const space = String(this.output.colorSpace ?? "srgb"),
+      transfer = String(this.output.transfer ?? "auto"),
+      q = quantizer(transfer === "auto" ? transferOf(space) : transfer);
+    if (!q) return undefined;
+    if (this.enabled) {
+      const view = String(this.a.view ?? "standard"),
+        tone = view === "raw" ? "none" : String(this.a.toneMapping ?? "none");
+      if (
+        this.a.ocioConfig ||
+        /** @type {unknown[]} */ (this.a.looks ?? []).length ||
+        this.working !== "linear-srgb" ||
+        tone !== "none" ||
+        !["standard", "raw"].includes(view)
+      )
+        return undefined;
+      matrix(String(this.a.display ?? "srgb"));
+    }
+    const depth = !this.enabled
+      ? 0
+      : { 8: 1, 16: 2, "16f": 3, "32f": 4 }[String(this.a.bitDepth ?? "32f")];
+    if (depth === undefined) return undefined;
+    const A = space === "linear-srgb" ? undefined : matrix("linear-srgb"),
+      B = space === "linear-srgb" ? undefined : inverse(matrix(space));
+    return {
+      depth,
+      exposureGain: this.enabled ? 2 ** Number(this.a.exposure ?? 0) : 1,
+      matrix: A && B ? [...A, ...B].map(Number) : undefined,
+      thresholds: q.thresholds,
+      preserveAlpha,
+    };
   }
   /** Float planar EXR path retains scene-linear values above one and negative values.
    * @param {Surface} s @param {boolean} [preserveAlpha] */

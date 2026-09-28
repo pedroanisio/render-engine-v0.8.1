@@ -54,5 +54,8 @@
     "@types/pngjs": "6.0.5",
     "prettier": "3.9.9",
     "typescript": "5.9.3"
+  },
+  "optionalDependencies": {
+    "webgpu": "0.4.0"
   }
 }

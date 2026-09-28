@@ -62,6 +62,25 @@ function colored(s, c, alpha, region) {
   o.bbox = region;
   return o;
 }
+/** @type {Map<string,Float64Array>} */ const vignettes = new Map();
+/** Vignette weight per pixel for one geometry, as the per-pixel formula gives it.
+ * @param {number} w @param {number} h @param {number} cx @param {number} cy
+ * @param {number} threshold @param {number} softness @param {number} intensity */
+function vignetteWeights(w, h, cx, cy, threshold, softness, intensity) {
+  const key = `${w} ${h} ${cx} ${cy} ${threshold} ${softness} ${intensity}`;
+  let weights = vignettes.get(key);
+  if (!weights) {
+    weights = new Float64Array(w * h);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const d = Math.hypot((x - cx) / (w / 2), (y - cy) / (h / 2));
+        weights[y * w + x] = clamp((d - threshold) / softness) * intensity;
+      }
+    if (vignettes.size >= 8) vignettes.clear();
+    vignettes.set(key, weights);
+  }
+  return weights;
+}
 /** @param {Surface} s @param {Params} p @param {{scale:number,time:number,frame:number,source?:Surface}} env */
 export function spatial(s, p, env) {
   const w = s.width,
@@ -328,16 +347,66 @@ export function spatial(s, p, env) {
         ? c.map((v) => v * (1 + shade))
         : Array(3).fill(0.5 + shade);
     });
-  if (type === "vignette")
-    return colors(s, (c, a, x, y) => {
-      const d = Math.hypot((x - cx) / (w / 2), (y - cy) / (h / 2)),
-        v =
-          clamp(
-            (d - Number(p.threshold ?? 0.7)) /
-              Math.max(0.001, Number(p.softness ?? 0.1)),
-          ) * intensity;
-      return c.map((q, k) => q * (1 - v) + Number(color[k]) * v);
-    });
+  if (type === "vignette") {
+    // The same arithmetic as the colors() callback it replaces; the per-pixel
+    // weight depends only on position, so it is computed once per geometry.
+    const weights = vignetteWeights(
+        w,
+        h,
+        cx,
+        cy,
+        Number(p.threshold ?? 0.7),
+        Math.max(0.001, Number(p.softness ?? 0.1)),
+        intensity,
+      ),
+      out = new Surface(w, h),
+      d = s.data,
+      o = out.data,
+      c0 = Number(color[0]),
+      c1 = Number(color[1]),
+      c2 = Number(color[2]);
+    let finite = true;
+    for (let i = 0, j = 0; i < w * h; i++, j += 4) {
+      const a = /** @type {number} */ (d[j + 3]),
+        v = /** @type {number} */ (weights[i]),
+        keep = 1 - v,
+        r0 =
+          a === 1
+            ? /** @type {number} */ (d[j])
+            : a
+              ? /** @type {number} */ (d[j]) / a
+              : 0,
+        r1 =
+          a === 1
+            ? /** @type {number} */ (d[j + 1])
+            : a
+              ? /** @type {number} */ (d[j + 1]) / a
+              : 0,
+        r2 =
+          a === 1
+            ? /** @type {number} */ (d[j + 2])
+            : a
+              ? /** @type {number} */ (d[j + 2]) / a
+              : 0,
+        alpha = clamp(a),
+        o0 = (r0 * keep + c0 * v) * alpha,
+        o1 = (r1 * keep + c1 * v) * alpha,
+        o2 = (r2 * keep + c2 * v) * alpha;
+      if (
+        o0 - o0 !== 0 ||
+        o1 - o1 !== 0 ||
+        o2 - o2 !== 0 ||
+        alpha - alpha !== 0
+      )
+        finite = false;
+      o[j] = o0;
+      o[j + 1] = o1;
+      o[j + 2] = o2;
+      o[j + 3] = alpha;
+    }
+    out.finite = finite;
+    return out;
+  }
   if (type === "noise")
     return colors(s, (c, a, x, y) =>
       c.map(

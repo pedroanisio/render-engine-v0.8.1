@@ -25,7 +25,8 @@ import { createRenderer } from "./setup.js";
 import { FramePool, defaultThreads } from "./frame-pool.js";
 
 import { loadScene } from "../index.js";
-import { accessibilityReport } from "./accessibility.js";
+import { accessibilityReport, contrastFrame } from "./accessibility.js";
+import { gpuDevice, gpuFrame } from "./gpu.js";
 import { measureAudio } from "./audio.js";
 import { captionLanguage } from "./caption-languages.js";
 import { toVtt, clipCaptions } from "./captions.js";
@@ -35,6 +36,7 @@ import { sphericalMetadata } from "./three/metadata.js";
 import {
   videoArguments,
   colorArguments,
+  gpuEncoder,
   audioArguments,
   encoderPreflight,
   checkEncoding,
@@ -66,6 +68,7 @@ export const RENDERER_VERSION = "13";
  * @property {string} [work] scratch directory (default: <scene dir>/_tmp/render)
  * @property {[number, number]} [shard] [k, n]: render only segments whose index % n === k, then stop
  * @property {number} [jobs] run this many shard processes in parallel before assembling
+ * @property {"auto"|"off"|"on"} [gpu] GPU use: "auto" (default) encodes on an NVIDIA GPU encoder and finishes frames on a WebGPU device where this machine has them; "on" requires both; "off" keeps the CPU path, whose output is bit-identical on every machine
  * @property {number} [threads] render frames on this many worker threads (default: chosen from cores and free memory; 1 inside shards)
  * @property {boolean} [available] render only segments whose image assets exist; skip assembly
  * @property {(line: string) => void} [log]
@@ -141,6 +144,7 @@ export async function renderEpisode(o) {
       ...(o.scale ? ["--scale", String(o.scale)] : []),
       ...(o.work ? ["--work", o.work] : []),
       ...(o.threads !== undefined ? ["--threads", String(o.threads)] : []),
+      ...(o.gpu !== undefined ? ["--gpu", o.gpu] : []),
       ...(o.from !== undefined ? ["--from", String(o.from)] : []),
       ...(o.to !== undefined ? ["--to", String(o.to)] : []),
       ...(o.available ? ["--available", "yes"] : []),
@@ -209,6 +213,22 @@ export async function renderEpisode(o) {
     if (!o.shard && !o.available)
       releaseLock = outputLock(resolve(base, String(oa.path)));
     const encoderVersion = encoderPreflight(oa);
+    // A GPU encoder, where this machine has one for this output (--encoder).
+    const gpuMode = o.gpu ?? "auto",
+      gpu = gpuEncoder(
+        oa,
+        gpuMode === "off" ? "cpu" : gpuMode === "on" ? "gpu" : "auto",
+        W,
+        H,
+      );
+    // Frames finish on the GPU where a device is available; its results are
+    // deterministic per device and driver, so the device keys the segments.
+    const gpuRender =
+      gpuMode !== "off" && plan.codec !== "exr-sequence"
+        ? await gpuDevice()
+        : undefined;
+    if (gpuMode === "on" && !gpuRender)
+      throw new Error("--gpu on: no WebGPU device is available for rendering");
     const destinations = out.children
       .filter((n) => n.name === "destination")
       .map((n) => destinationPlan(n));
@@ -237,11 +257,13 @@ export async function renderEpisode(o) {
       o.threads ??
       (o.shard || Math.round(encodedDuration * fps) < 24
         ? 1
-        : defaultThreads());
-    const finalCodecArgs = videoArguments(oa, fps, encodedDuration, W, H);
-    checkEncoding(oa, fps, encodedDuration, W, H, work);
+        : defaultThreads(!!gpu));
+    const finalCodecArgs = videoArguments(oa, fps, encodedDuration, W, H, gpu);
+    checkEncoding(oa, fps, encodedDuration, W, H, work, gpu);
     const sceneHash = createHash("sha256")
       .update(String(encoderVersion).split("\n")[0] ?? "")
+      .update(gpu?.identity ?? "cpu")
+      .update(gpuRender?.identity ?? "cpu-render")
       .update(JSON.stringify(renderer.nativeInfo))
       .update(sceneBytes)
       .update(
@@ -267,23 +289,50 @@ export async function renderEpisode(o) {
       )
       .digest("hex");
     const floatFrames = plan.codec === "exr-sequence";
+    // Scaling and RGB-to-YUV conversion of the delivery encode.
+    let filters = `scale=${W}:${H}:flags=lanczos:out_color_matrix=${oa.colorSpace === "rec2020" ? "bt2020" : "bt709"}:out_range=${oa.colorRange === "full" ? "full" : "limited"},setsar=${project.attributes.pixelAspect ?? 1}`;
+    // Single-pass CRF H.264/H.265 deliveries encode each segment straight to the
+    // delivery codec as a closed-GOP chunk: chunks encode in parallel, are cached,
+    // and the export joins them without re-encoding. Rate-targeted, two-pass and
+    // other outputs keep lossless intermediates and one delivery encode.
+    const direct =
+      ["h264", "h265"].includes(plan.codec) &&
+      !plan.sequence &&
+      !plan.audioOnly &&
+      oa.bitrate === undefined &&
+      oa.maxFileSize === undefined &&
+      oa.twoPass !== true;
     const segmentExtension = floatFrames ? "nut" : "mkv";
     const codecArgs = floatFrames
       ? ["-c:v", "rawvideo", "-pix_fmt", "gbrapf32le", "-f", "nut"]
-      : [
-          "-c:v",
-          "ffv1",
-          "-level",
-          "3",
-          "-threads",
-          "1",
-          "-pix_fmt",
-          "gbrap16le",
-          "-fflags",
-          "+bitexact",
-          "-map_metadata",
-          "-1",
-        ];
+      : direct
+        ? [
+            "-vf",
+            filters,
+            ...finalCodecArgs,
+            ...colorArguments(oa),
+            "-an",
+            "-fflags",
+            "+bitexact",
+            "-map_metadata",
+            "-1",
+            "-f",
+            "matroska",
+          ]
+        : [
+            "-c:v",
+            "ffv1",
+            "-level",
+            "3",
+            "-threads",
+            "1",
+            "-pix_fmt",
+            "gbrap16le",
+            "-fflags",
+            "+bitexact",
+            "-map_metadata",
+            "-1",
+          ];
 
     // Segment boundaries: every top-level group start/end, so a segment never straddles shots.
     const composition = /** @type {SceneNode} */ (
@@ -310,6 +359,22 @@ export async function renderEpisode(o) {
         Math.round(/** @type {number} */ (times[i + 1]) * fps),
       );
       if (f1 > f0) spans.push({ f0, f1 });
+    }
+    // Long shots are split so that segments spread evenly over the workers.
+    const longest = Math.max(1, Math.round(10 * fps));
+    for (let i = 0; i < spans.length; i++) {
+      const { f0, f1 } = /** @type {{f0:number,f1:number}} */ (spans[i]),
+        parts = Math.ceil((f1 - f0) / longest);
+      if (parts < 2) continue;
+      spans.splice(
+        i,
+        1,
+        ...Array.from({ length: parts }, (_, k) => ({
+          f0: f0 + Math.round(((f1 - f0) * k) / parts),
+          f1: f0 + Math.round(((f1 - f0) * (k + 1)) / parts),
+        })),
+      );
+      i += parts - 1;
     }
     // Each segment's key covers only the image files its shots draw, so regenerating one
     // shot's plates re-renders only that shot.
@@ -449,6 +514,21 @@ export async function renderEpisode(o) {
     /** @type {Map<string,number>} */ const segmentDurations = new Map();
     let exportStart = duration;
     let exportEnd = 0;
+    /** @type {Array<{index:number,f0:number,f1:number,path:string}>} */
+    const jobs = [];
+    // A contrast check needs every exported frame rendered with and without
+    // text; measuring while the frames render (and caching the result with the
+    // segment) replaces a second, serial pass over the whole export.
+    const measureContrast =
+      renderer.useCompositor &&
+      !plan.sequence &&
+      !plan.audioOnly &&
+      (scene.children
+        .find((n) => n.name === "metadata")
+        ?.children.find((n) => n.name === "accessibility")?.attributes
+        .contrastCheck ?? "off") !== "off";
+    /** @type {Map<number,Array<[string,number]>>} */ const contrast =
+      new Map();
     for (const [index, { f0, f1 }] of spans.entries()) {
       const seg = segmentAssets(f0 / fps, f1 / fps);
       const key = createHash("sha256")
@@ -492,25 +572,75 @@ export async function renderEpisode(o) {
         (await fileDigest(path, o.signal)) ===
           readFileSync(path + ".sha256", "utf8")
       ) {
+        if (measureContrast && existsSync(path + ".contrast.json"))
+          for (const [f, c] of JSON.parse(
+            readFileSync(path + ".contrast.json", "utf8"),
+          ))
+            contrast.set(f, c);
         cached += 1;
         continue;
       }
+      jobs.push({ index, f0, f1, path });
+    }
+    /** @param {number} f0 @param {number} f1 @param {(f:number,c:Array<[string,number]>)=>void} [onContrast] */
+    const framesToEncode = async function* (f0, f1, onContrast) {
+      for (let f = f0; f < f1; f++) {
+        o.signal?.throwIfAborted();
+        const done = gpuRender
+          ? await gpuFrame(
+              renderer,
+              gpuRender,
+              f / fps,
+              oa.alpha === true,
+              !!onContrast,
+            )
+          : undefined;
+        if (done) {
+          if (onContrast) onContrast(f, done.contrast ?? []);
+          yield done.bytes;
+          continue;
+        }
+        let frame;
+        if (onContrast) {
+          const measured = contrastFrame(renderer, f / fps);
+          onContrast(f, measured.contrast);
+          frame = measured.picture;
+        } else frame = renderer.render(f / fps);
+        yield floatFrames
+          ? renderer.color.encodeFloat(frame, oa.alpha === true)
+          : renderer.color.encode16(frame, oa.alpha === true);
+      }
+    };
+    const workFrames = jobs.reduce((n, j) => n + j.f1 - j.f0, 0);
+    if (threads > 1 && workFrames > 1)
+      pool = await new FramePool(o, Math.min(threads, jobs.length), {
+        sceneBytes,
+        reads,
+      }).start();
+    // One segment per worker, each rendered in order so consecutive frames
+    // share the worker's layer cache; its encoder runs alongside.
+    const failed = new AbortController(),
+      signal = o.signal
+        ? AbortSignal.any([o.signal, failed.signal])
+        : failed.signal;
+    /** @param {{index:number,f0:number,f1:number,path:string}} job */
+    const encodeSegment = async ({ index, f0, f1, path }) => {
       mkdirSync(dirname(path), { recursive: true });
       const tmp = join(work, `segment-${index}.${segmentExtension}`);
-      const framesToEncode = function* () {
-        for (let f = f0; f < f1; f++) {
-          o.signal?.throwIfAborted();
-          const frame = renderer.render(f / fps);
-          yield floatFrames
-            ? renderer.color.encodeFloat(frame, oa.alpha === true)
-            : renderer.color.encode16(frame, oa.alpha === true);
-        }
-      };
-      if (threads > 1 && f1 - f0 > 1 && !pool)
-        pool = await new FramePool(o, threads, { sceneBytes, reads }).start();
+      /** @type {Array<[number, Array<[string,number]>]>} */ const measured =
+        [];
+      const onContrast = measureContrast
+        ? (
+            /** @type {number} */ f,
+            /** @type {Array<[string,number]>} */ c,
+          ) => {
+            contrast.set(f, c);
+            measured.push([f, c]);
+          }
+        : undefined;
       const frames = pool
-        ? pool.frames(f0, f1, fps, renderer)
-        : framesToEncode();
+        ? pool.segment(f0, f1, fps, renderer, onContrast)
+        : framesToEncode(f0, f1, onContrast);
       await processRun(
         "ffmpeg",
         [
@@ -530,7 +660,7 @@ export async function renderEpisode(o) {
           ...codecArgs,
           tmp,
         ],
-        { frames, signal: o.signal },
+        { frames, signal },
       );
       if (renderer.unsupported.size) {
         rmSync(tmp, { force: true });
@@ -539,12 +669,70 @@ export async function renderEpisode(o) {
         );
       }
       renameSync(tmp, path);
-      writeAtomic(path + ".sha256", await fileDigest(path, o.signal));
-      renderer.cache.clear();
-      pool?.clear();
+      if (measureContrast)
+        writeAtomic(path + ".contrast.json", JSON.stringify(measured));
+      writeAtomic(path + ".sha256", await fileDigest(path, signal));
+      if (!pool) renderer.cache.clear();
       rendered += 1;
       for (const warning of renderer.warnings) log(`warning: ${warning}`);
       log(`segment ${f0}-${f1} rendered`);
+    };
+    // The audio mix needs nothing from the pictures: it runs while they render.
+    /** @type {Promise<unknown>|undefined} */ let audioRun;
+    if (!o.shard && !o.available) {
+      const requestFile = join(work, "audio-request.json");
+      writeFileSync(
+        requestFile,
+        JSON.stringify(
+          {
+            scene,
+            base,
+            work,
+            duration,
+            parameters: runtime.params,
+            // Include/data text the renderer compiled from, so the worker needs no disk reads.
+            reads,
+            tracks: renderer.captionTracks,
+            output: oa,
+            start: exportStart,
+            end: exportEnd,
+          },
+          (_k, v) => (typeof v === "bigint" ? { $bigint: String(v) } : v),
+        ),
+      );
+      audioRun = processRun(
+        process.execPath,
+        [
+          fileURLToPath(new URL("../../bin/audio-worker.js", import.meta.url)),
+          requestFile,
+        ],
+        { signal },
+      );
+      // A failed mix stops the pictures too; the error surfaces where it is awaited.
+      audioRun.catch((error) => failed.abort(error));
+    }
+    // Longest first, so the segments that finish last are short ones.
+    const order = [...jobs].sort(
+      (a, b) => b.f1 - b.f0 - (a.f1 - a.f0) || a.f0 - b.f0,
+    );
+    let next = 0;
+    const lanes = await Promise.allSettled(
+      Array.from({ length: pool?.threads ?? 1 }, async () => {
+        try {
+          while (next < order.length)
+            await encodeSegment(
+              /** @type {(typeof order)[number]} */ (order[next++]),
+            );
+        } catch (error) {
+          failed.abort(error);
+          throw error;
+        }
+      }),
+    );
+    const failure = lanes.find((l) => l.status === "rejected");
+    if (failure) {
+      await audioRun?.catch(() => {});
+      throw /** @type {PromiseRejectedResult} */ (failure).reason;
     }
     if (renderer.unsupported.size)
       throw new Error(
@@ -610,34 +798,7 @@ export async function renderEpisode(o) {
     const master = scene.children
       .find((n) => n.name === "audioMix")
       ?.children.find((n) => n.name === "master");
-    const requestFile = join(work, "audio-request.json");
-    writeFileSync(
-      requestFile,
-      JSON.stringify(
-        {
-          scene,
-          base,
-          work,
-          duration,
-          parameters: runtime.params,
-          // Include/data text the renderer compiled from, so the worker needs no disk reads.
-          reads,
-          tracks: renderer.captionTracks,
-          output: oa,
-          start: exportStart,
-          end: exportEnd,
-        },
-        (_k, v) => (typeof v === "bigint" ? { $bigint: String(v) } : v),
-      ),
-    );
-    await processRun(
-      process.execPath,
-      [
-        fileURLToPath(new URL("../../bin/audio-worker.js", import.meta.url)),
-        requestFile,
-      ],
-      { signal: o.signal },
-    );
+    await audioRun;
     const { finished: finishedAudio, accessibility } = JSON.parse(
       readFileSync(join(work, "audio-result.json"), "utf8"),
     );
@@ -725,7 +886,6 @@ export async function renderEpisode(o) {
         : plan.container === "m4a"
           ? "ipod"
           : plan.container;
-    let filters = `scale=${W}:${H}:flags=lanczos:out_color_matrix=${oa.colorSpace === "rec2020" ? "bt2020" : "bt709"}:out_range=${oa.colorRange === "full" ? "full" : "limited"},setsar=${project.attributes.pixelAspect ?? 1}`;
     if (plan.codec === "gif")
       filters +=
         ",split[v][g];[g]palettegen=reserve_transparent=1:stats_mode=single[p];[v][p]paletteuse=new=1:alpha_threshold=128";
@@ -733,11 +893,13 @@ export async function renderEpisode(o) {
       ...muxArgs,
       "-t",
       String(exportEnd - exportStart),
-      ...finalCodecArgs,
+      ...(direct ? ["-c:v", "copy"] : finalCodecArgs),
       ...(!plan.audioOnly
         ? ["-frames:v", String(Math.round((exportEnd - exportStart) * fps))]
         : []),
-      ...(!plan.audioOnly ? ["-vf", filters, ...colorArguments(oa)] : []),
+      ...(!plan.audioOnly && !direct
+        ? ["-vf", filters, ...colorArguments(oa)]
+        : []),
       ...(["mp4", "mov", "m4a"].includes(plan.container)
         ? [
             "-movflags",
@@ -837,6 +999,7 @@ export async function renderEpisode(o) {
         exportStart,
         exportEnd,
         fps,
+        contrast,
       );
       writeAtomic(
         `${video}.accessibility.json`,

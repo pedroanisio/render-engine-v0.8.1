@@ -22,7 +22,7 @@ import { add } from "../eval/value.js";
 import opentype from "opentype.js";
 import { parseColor } from "./color.js";
 import { decodePng } from "./image.js";
-import { Surface } from "./surface.js";
+import { Surface, clampRect } from "./surface.js";
 import { renderText } from "./text.js";
 import { drawRotated, ellipseMask, rain } from "./effects.js";
 
@@ -212,6 +212,17 @@ export class FrameRenderer {
     this.useCompositor =
       !!io.media || needsCompositor(scene) || this.effects.size > 0;
     /** @type {Map<SceneNode,string>} */ this.effectStops = new Map();
+    /** Post-effect layers of the previous frames, reused while their inputs hold.
+     * `SCENE_RENDER_LAYER_CACHE=0` disables it (for A/B verification).
+     * @type {Map<SceneNode,Map<string,{frame:number,rect:import('./surface.js').Rect,pixels:Float32Array<ArrayBufferLike>,bbox:import('./surface.js').Rect|undefined,finite:boolean|undefined,masks:Array<{id:string,pixels:number[]}>|undefined}>>|undefined} */
+    this.layerCache =
+      process.env.SCENE_RENDER_LAYER_CACHE === "0" ? undefined : new Map();
+    this.layerFrame = 0;
+    /** Set while renderDeferred composites: the compositor leaves a final
+     * full-frame adjustment to the GPU tail. */
+    this.deferTail = false;
+    /** @type {Map<SceneNode,boolean>} */ this.cacheableNodes = new Map();
+    /** @type {Map<SceneNode,boolean>} */ this.textNodes = new Map();
     const needsTemporal = (/** @type {SceneNode} */ n) =>
       ["deform", "particleEmitter", "transformConstraint", "tracking"].includes(
         n.name,
@@ -294,13 +305,31 @@ export class FrameRenderer {
   /** Record core glyph pixels after layout, deformation, effects and clipping.
    * @param {Surface} mask @param {string} id */
   recordTextMask(mask, id) {
+    // Only the zero-region hint can hold ink; rows are scanned in the same
+    // order as a full scan, so the pixel list is unchanged.
+    const r = mask.bbox
+        ? clampRect(mask.bbox, mask.width, mask.height)
+        : { x0: 0, y0: 0, x1: mask.width, y1: mask.height },
+      d = mask.data;
     let maximum = 0;
-    for (let i = 3; i < mask.data.length; i += 4)
-      maximum = Math.max(maximum, Number(mask.data[i]));
+    for (let y = r.y0; y < r.y1; y++)
+      for (
+        let i = (y * mask.width + r.x0) * 4 + 3,
+          end = (y * mask.width + r.x1) * 4;
+        i < end;
+        i += 4
+      )
+        maximum = Math.max(maximum, Number(d[i]));
     if (maximum <= 0) return;
     const pixels = [];
-    for (let i = 3; i < mask.data.length; i += 4)
-      if (Number(mask.data[i]) >= maximum * 0.95) pixels.push(i - 3);
+    for (let y = r.y0; y < r.y1; y++)
+      for (
+        let i = (y * mask.width + r.x0) * 4 + 3,
+          end = (y * mask.width + r.x1) * 4;
+        i < end;
+        i += 4
+      )
+        if (Number(d[i]) >= maximum * 0.95) pixels.push(i - 3);
     this.contrastChecks.push({ id, pixels });
   }
 
@@ -369,6 +398,14 @@ export class FrameRenderer {
   /** @param {number} t seconds on the composition timeline @returns {Surface} */
   render(t) {
     this.time = t;
+    // Layer states unused for half a second are unlikely to recur soon.
+    this.layerFrame++;
+    if (this.layerCache)
+      for (const [node, variants] of this.layerCache) {
+        for (const [key, entry] of variants)
+          if (entry.frame < this.layerFrame - 12) variants.delete(key);
+        if (!variants.size) this.layerCache.delete(node);
+      }
     if (this.useCompositor)
       return this.color.finish(new Compositor(this).render());
     const out = new Surface(this.width, this.height);
@@ -382,6 +419,35 @@ export class FrameRenderer {
     );
     this.children(this.composition, out, 0, 0, out.bounds());
     return out;
+  }
+
+  /**
+   * The frame at `t` up to its GPU tail: the composited surface before a final
+   * full-frame adjustment of point operations (`tail`, empty when there is
+   * none) and before the display finish. Undefined when the frame needs the
+   * CPU path (no compositor, or a colour pipeline the GPU tail cannot finish).
+   * @param {number} t @param {boolean} preserveAlpha
+   * @returns {{surface: Surface, tail: import('./gpu.js').TailOp[], plan: import('./gpu.js').GpuPlan}|undefined}
+   */
+  renderDeferred(t, preserveAlpha) {
+    const plan = this.color.gpuPlan(preserveAlpha);
+    if (!this.useCompositor || !plan) return undefined;
+    this.time = t;
+    this.layerFrame++;
+    if (this.layerCache)
+      for (const [node, variants] of this.layerCache) {
+        for (const [key, entry] of variants)
+          if (entry.frame < this.layerFrame - 12) variants.delete(key);
+        if (!variants.size) this.layerCache.delete(node);
+      }
+    this.deferTail = true;
+    try {
+      const compositor = new Compositor(this),
+        surface = compositor.render();
+      return { surface, tail: compositor.tail ?? [], plan };
+    } finally {
+      this.deferTail = false;
+    }
   }
 
   /**

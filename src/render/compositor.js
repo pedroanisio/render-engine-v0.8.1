@@ -28,6 +28,8 @@ import { shapePath, modify, modifyPaths, trimPaths } from "./geometry/path.js";
 import { paint } from "./geometry/paint.js";
 import { composite } from "./geometry/blend.js";
 import { layout, align, safeArea } from "./geometry/layout.js";
+import { parseColor } from "./color.js";
+import { OP } from "./gpu.js";
 /** @typedef {import('../xsd/validate.js').ValidNode} Node */
 /** @typedef {import('./geometry/matrix.js').Matrix} Matrix */
 /** @typedef {import('./geometry/layout.js').Box} Box */
@@ -64,6 +66,8 @@ export class Compositor {
     this.warnings = new Set();
     /** @type {Node|undefined} */ this.captureTarget = undefined;
     /** @type {Surface|undefined} */ this.capture = undefined;
+    /** Final adjustment left to the GPU tail (see tailOps).
+     * @type {import('./gpu.js').TailOp[]|undefined} */ this.tail = undefined;
     /** @type {Map<Node,Record<string,any>>} */ this.attrCache = new Map();
     /** @type {number|undefined} */ this.attrTime = undefined;
     /** @type {unknown} */ this.attrOverrides = undefined;
@@ -869,123 +873,82 @@ export class Compositor {
       this.children(node, dst, localClip, next);
       return;
     }
-    const layer = new Surface(this.width, this.height);
-    layer.bbox = EMPTY_RECT;
-    if (grouped) {
-      if (node.sourceBox?.fit === "contain-blur") {
-        this.measure(node, m, box.width, box.height, "cover");
+    // A node whose subtree state is unchanged since the last frame reproduces its
+    // post-effect layer exactly; stop-motion holds make this the common case.
+    const cacheKey = this.layerKey(node, m, box, effects),
+      variants = cacheKey ? this.host.layerCache?.get(node) : undefined,
+      capturing = this.host.captureContrast,
+      found = cacheKey ? variants?.get(cacheKey) : undefined,
+      // Text masks recorded inside the subtree replay on a hit; an entry
+      // stored without them cannot serve a contrast capture.
+      cached = found && (!capturing || found.masks) ? found : undefined,
+      firstMask = this.host.contrastChecks.length;
+    /** @type {Surface} */ let layer;
+    if (cached) {
+      cached.frame = this.host.layerFrame;
+      layer = restoreLayer(cached, this.width, this.height);
+      if (capturing) this.host.contrastChecks.push(...(cached.masks ?? []));
+    } else {
+      layer = new Surface(this.width, this.height);
+      layer.bbox = EMPTY_RECT;
+      if (grouped) {
+        if (node.sourceBox?.fit === "contain-blur") {
+          this.measure(node, m, box.width, box.height, "cover");
+          this.children(node, layer, null, next);
+          for (let k = 0; k < 4; k++) {
+            const channel = new Float32Array(this.width * this.height);
+            for (let i = 0; i < channel.length; i++)
+              channel[i] = Number(layer.data[i * 4 + k]);
+            const blurred = this.feather(channel, 12 * this.host.scale);
+            for (let i = 0; i < channel.length; i++)
+              layer.data[i * 4 + k] = Number(blurred[i]);
+          }
+          layer.bbox = undefined;
+          this.measure(node, m, box.width, box.height);
+        }
         this.children(node, layer, null, next);
-        for (let k = 0; k < 4; k++) {
-          const channel = new Float32Array(this.width * this.height);
-          for (let i = 0; i < channel.length; i++)
-            channel[i] = Number(layer.data[i * 4 + k]);
-          const blurred = this.feather(channel, 12 * this.host.scale);
-          for (let i = 0; i < channel.length; i++)
-            layer.data[i * 4 + k] = Number(blurred[i]);
+      } else if (node.name === "shape") {
+        let paths = [{ path: shapePath(a, box.width, box.height), opacity: 1 }];
+        for (const modifier of node.children.filter(
+          (n) => n.name === "shapeModifier",
+        ))
+          paths = modifyPaths(paths, this.attrs(modifier), this.host.time);
+        paths = trimPaths(paths, a);
+        for (const part of paths) {
+          const temp = new Surface(this.width, this.height),
+            p = part.path,
+            fill = () =>
+              this.fill(temp, p, m, String(a.fill ?? "#FFFFFFFF"), box),
+            stroke = () => {
+              if (Number(a.strokeWidth) > 0)
+                this.fill(temp, p, m, String(a.stroke ?? "#00000000"), box, a);
+            };
+          temp.bbox = EMPTY_RECT;
+          if (a.paintOrder === "stroke-fill") {
+            stroke();
+            fill();
+          } else {
+            fill();
+            stroke();
+          }
+          composite(layer, temp, "normal", part.opacity);
         }
-        layer.bbox = undefined;
-        this.measure(node, m, box.width, box.height);
-      }
-      this.children(node, layer, null, next);
-    } else if (node.name === "shape") {
-      let paths = [{ path: shapePath(a, box.width, box.height), opacity: 1 }];
-      for (const modifier of node.children.filter(
-        (n) => n.name === "shapeModifier",
-      ))
-        paths = modifyPaths(paths, this.attrs(modifier), this.host.time);
-      paths = trimPaths(paths, a);
-      for (const part of paths) {
-        const temp = new Surface(this.width, this.height),
-          p = part.path,
-          fill = () =>
-            this.fill(temp, p, m, String(a.fill ?? "#FFFFFFFF"), box),
-          stroke = () => {
-            if (Number(a.strokeWidth) > 0)
-              this.fill(temp, p, m, String(a.stroke ?? "#00000000"), box, a);
-          };
-        temp.bbox = EMPTY_RECT;
-        if (a.paintOrder === "stroke-fill") {
-          stroke();
-          fill();
-        } else {
-          fill();
-          stroke();
-        }
-        composite(layer, temp, "normal", part.opacity);
-      }
-    } else if (node.name === "layer") {
-      const isText = this.host.assets.get(String(a.asset))?.name === "text";
-      if (isText && this.host.suppressText) return;
-      this.imageLayer(layer, this.image(String(a.asset), node), m, box, a);
-    } else if (node.name === "adjustment") {
-      layer.data.set(dst.data);
-      layer.bbox = dst.bbox;
-    } else if (node.name === "particleEmitter") {
-      const samplePaint = (
-        /** @type {string} */ spec,
-        /** @type {number} */ x,
-        /** @type {number} */ y,
-      ) =>
-        this.host.color.rgb(
-          paint(
-            spec,
-            {
-              paints: this.paints,
-              tokens: this.host.tokens,
-              attributes: (n) => this.attrs(n),
-              image: (id) => this.image(id),
-              scale: this.host.scale,
-            },
-            box.width,
-            box.height,
-          )(x, y),
-        );
-      layer.data.set(renderParticles(node, this.host, m, samplePaint).data);
-      layer.bbox = undefined;
-    }
-    if (
-      node.children.some((c) => c.name === "deform" || c.name === "softBody")
-    ) {
-      layer.data.set(deformSurface(layer, node, this.host, m, box).data);
-      layer.bbox = undefined;
-      if (masks) {
-        const maskSurface = new Surface(this.width, this.height);
-        for (let i = 0; i < masks.length; i++)
-          maskSurface.data.set(
-            [
-              Number(masks[i]),
-              Number(masks[i]),
-              Number(masks[i]),
-              Number(masks[i]),
-            ],
-            i * 4,
-          );
-        const warped = deformSurface(maskSurface, node, this.host, m, box);
-        for (let i = 0; i < masks.length; i++)
-          masks[i] = Number(warped.data[i * 4 + 3]);
-        masks.bbox = undefined;
-      }
-    }
-    for (const id of effects) {
-      if (this.host.effectStops.get(node) === id) break;
-      const effect = this.host.effects.get(id),
-        ea = effect ? this.attrs(effect) : {};
-      let source;
-      const sourcePaint =
-        ea.type === "gradient-map" && this.paints.has(String(ea.source))
-          ? `url(#${String(ea.source)})`
-          : undefined;
-      if (ea.source && !sourcePaint) {
-        const target = this.nodes.get(String(ea.source));
-        if (target) {
-          source = new Surface(this.width, this.height);
-          this.draw(target, source, null, next, true);
-        } else source = this.host.color.input(this.image(String(ea.source)));
-      }
-      const shaderPaint =
-        ea.paint || sourcePaint
-          ? paint(
-              String(ea.paint || sourcePaint),
+      } else if (node.name === "layer") {
+        const isText = this.host.assets.get(String(a.asset))?.name === "text";
+        if (isText && this.host.suppressText) return;
+        this.imageLayer(layer, this.image(String(a.asset), node), m, box, a);
+      } else if (node.name === "adjustment") {
+        layer.data.set(dst.data);
+        layer.bbox = dst.bbox;
+      } else if (node.name === "particleEmitter") {
+        const samplePaint = (
+          /** @type {string} */ spec,
+          /** @type {number} */ x,
+          /** @type {number} */ y,
+        ) =>
+          this.host.color.rgb(
+            paint(
+              spec,
               {
                 paints: this.paints,
                 tokens: this.host.tokens,
@@ -993,45 +956,126 @@ export class Compositor {
                 image: (id) => this.image(id),
                 scale: this.host.scale,
               },
-              this.vw,
-              this.vh,
-            )
-          : undefined;
-      this.host.applyEffects([id], layer, layer.bounds(), {
-        source,
-        params: Object.fromEntries(
-          (effect?.children ?? [])
-            .filter((n) => n.name === "param")
-            .map((n) => [
-              String(n.attributes.name),
-              uniformValue(n.attributes.value),
-            ]),
-        ),
-        lights: (ea.lights ?? []).map((/** @type {string} */ id) => {
-          const n = this.nodes.get(String(id));
-          if (!n) throw new Error(`Missing light ${id}`);
-          return this.attrs(n);
-        }),
-        paint: shaderPaint
-          ? (x, y) =>
-              this.host.color.rgb(
-                shaderPaint(x / this.host.scale, y / this.host.scale),
+              box.width,
+              box.height,
+            )(x, y),
+          );
+        layer.data.set(renderParticles(node, this.host, m, samplePaint).data);
+        layer.bbox = undefined;
+      }
+      if (
+        node.children.some((c) => c.name === "deform" || c.name === "softBody")
+      ) {
+        layer.data.set(deformSurface(layer, node, this.host, m, box).data);
+        layer.bbox = undefined;
+        if (masks) {
+          const maskSurface = new Surface(this.width, this.height);
+          for (let i = 0; i < masks.length; i++)
+            maskSurface.data.set(
+              [
+                Number(masks[i]),
+                Number(masks[i]),
+                Number(masks[i]),
+                Number(masks[i]),
+              ],
+              i * 4,
+            );
+          const warped = deformSurface(maskSurface, node, this.host, m, box);
+          for (let i = 0; i < masks.length; i++)
+            masks[i] = Number(warped.data[i * 4 + 3]);
+          masks.bbox = undefined;
+        }
+      }
+      for (const id of effects) {
+        if (this.host.effectStops.get(node) === id) break;
+        const effect = this.host.effects.get(id),
+          ea = effect ? this.attrs(effect) : {};
+        let source;
+        const sourcePaint =
+          ea.type === "gradient-map" && this.paints.has(String(ea.source))
+            ? `url(#${String(ea.source)})`
+            : undefined;
+        if (ea.source && !sourcePaint) {
+          const target = this.nodes.get(String(ea.source));
+          if (target) {
+            source = new Surface(this.width, this.height);
+            this.draw(target, source, null, next, true);
+          } else source = this.host.color.input(this.image(String(ea.source)));
+        }
+        const shaderPaint =
+          ea.paint || sourcePaint
+            ? paint(
+                String(ea.paint || sourcePaint),
+                {
+                  paints: this.paints,
+                  tokens: this.host.tokens,
+                  attributes: (n) => this.attrs(n),
+                  image: (id) => this.image(id),
+                  scale: this.host.scale,
+                },
+                this.vw,
+                this.vh,
               )
-          : undefined,
-        sample: (t) => {
-          const original = this.host.time,
-            previous = this.host.effectStops.get(node);
-          try {
-            this.host.time = t;
-            this.host.effectStops.set(node, id);
-            return new Compositor(this.host).render(node);
-          } finally {
-            this.host.time = original;
-            if (previous) this.host.effectStops.set(node, previous);
-            else this.host.effectStops.delete(node);
-          }
-        },
-      });
+            : undefined;
+        this.host.applyEffects([id], layer, layer.bounds(), {
+          source,
+          params: Object.fromEntries(
+            (effect?.children ?? [])
+              .filter((n) => n.name === "param")
+              .map((n) => [
+                String(n.attributes.name),
+                uniformValue(n.attributes.value),
+              ]),
+          ),
+          lights: (ea.lights ?? []).map((/** @type {string} */ id) => {
+            const n = this.nodes.get(String(id));
+            if (!n) throw new Error(`Missing light ${id}`);
+            return this.attrs(n);
+          }),
+          paint: shaderPaint
+            ? (x, y) =>
+                this.host.color.rgb(
+                  shaderPaint(x / this.host.scale, y / this.host.scale),
+                )
+            : undefined,
+          sample: (t) => {
+            const original = this.host.time,
+              previous = this.host.effectStops.get(node);
+            try {
+              this.host.time = t;
+              this.host.effectStops.set(node, id);
+              return new Compositor(this.host).render(node);
+            } finally {
+              this.host.time = original;
+              if (previous) this.host.effectStops.set(node, previous);
+              else this.host.effectStops.delete(node);
+            }
+          },
+        });
+      }
+      if (cacheKey && this.host.layerCache) {
+        const kept = variants ?? new Map();
+        kept.set(
+          cacheKey,
+          storeLayer(
+            layer,
+            this.host.layerFrame,
+            capturing ? this.host.contrastChecks.slice(firstMask) : undefined,
+          ),
+        );
+        // Loops and boils cycle through a few states; keep the recent ones.
+        if (kept.size > LAYER_VARIANTS) {
+          let oldest;
+          for (const [k, v] of kept)
+            if (
+              !oldest ||
+              v.frame < /** @type {any} */ (kept.get(oldest)).frame
+            )
+              oldest = k;
+          if (oldest !== undefined) kept.delete(oldest);
+        }
+        this.host.layerCache.set(node, kept);
+      }
     }
     if (this.host.effectStops.has(node)) {
       dst.data.set(layer.data);
@@ -1124,6 +1168,264 @@ export class Compositor {
       }
       dst.bbox = unionRect(dst.bbox, copy.bbox);
     } else composite(dst, layer, String(a.blend ?? "normal"), opacity);
+  }
+  /**
+   * Cache key for `node`'s post-effect layer: everything the layer is computed
+   * from at this instant (evaluated attributes, activity, boxes and world
+   * matrices of the subtree, asset and effect attributes), or undefined when the
+   * layer may depend on anything else.
+   * @param {Node} node @param {Matrix} m @param {Box} box @param {string[]} effects
+   */
+  layerKey(node, m, box, effects) {
+    const host = this.host;
+    if (
+      !host.layerCache ||
+      host.effectStops.size ||
+      host.shutterSampling ||
+      host.inTexture ||
+      host.sampleTimes.size ||
+      this.captureTarget ||
+      !this.cacheable(node)
+    )
+      return undefined;
+    // Suppressed text only changes subtrees that draw text.
+    /** @type {unknown[]} */ const parts = [
+      m,
+      box,
+      effects,
+      host.suppressText && this.containsText(node),
+    ];
+    const effect = (/** @type {string} */ id) => {
+      const e = host.effects.get(id);
+      if (!e) return;
+      const ea = this.attrs(e);
+      parts.push(id, ea);
+      for (const light of ea.lights ?? []) {
+        const l = this.nodes.get(String(light));
+        parts.push(l ? this.attrs(l) : null);
+      }
+    };
+    for (const id of effects) effect(id);
+    const visit = (/** @type {Node} */ n, /** @type {boolean} */ root) => {
+      if (EVALUATED.has(n.name)) return;
+      const active = root || host.active(n);
+      parts.push(n.name, active);
+      if (!active) return;
+      const a = this.attrs(n);
+      parts.push(a, this.boxes.get(n));
+      if (visual.has(n.name)) parts.push(this.world(n));
+      if (n.name === "layer") {
+        const asset = host.assets.get(String(a.asset));
+        if (asset) {
+          const aa =
+            host.runtime?.attributes(asset, host.time) ?? asset.attributes;
+          parts.push(aa);
+          const style =
+            typeof aa.style === "string"
+              ? host.styles.get(aa.style)
+              : undefined;
+          if (style)
+            parts.push(
+              host.runtime?.attributes(style, host.time) ?? style.attributes,
+            );
+        }
+      }
+      if (!root) for (const id of a.effects ?? []) effect(String(id));
+      for (const c of n.children) visit(c, false);
+    };
+    visit(node, true);
+    return JSON.stringify(parts, (_, v) =>
+      typeof v === "bigint" ? `${v}n` : v,
+    );
+  }
+  /** Whether the subtree draws a text asset.
+   * @param {Node} n @returns {boolean} */
+  containsText(n) {
+    const memo = this.host.textNodes;
+    let text = memo.get(n);
+    if (text === undefined) {
+      text =
+        (n.name === "layer" &&
+          this.host.assets.get(String(n.attributes.asset))?.name === "text") ||
+        n.children.some((c) => this.containsText(c));
+      memo.set(n, text);
+    }
+    return text;
+  }
+  /** Whether a subtree's layer can only change through the state `layerKey`
+   * records: no clock-driven media or effects, no references outside it.
+   * @param {Node} n @returns {boolean} */
+  cacheable(n) {
+    const memo = this.host.cacheableNodes;
+    let ok = memo.get(n);
+    if (ok !== undefined) return ok;
+    const a = n.attributes;
+    ok =
+      !UNCACHEABLE.has(n.name) &&
+      a.matte === undefined &&
+      !n.children.some(
+        (c) =>
+          ["animate", "expression", "link"].includes(c.name) &&
+          ["asset", "effects", "matte"].includes(String(c.attributes.property)),
+      );
+    if (ok && n.name === "layer") {
+      const asset = this.host.assets.get(String(a.asset));
+      ok =
+        !!asset &&
+        STATIC_ASSETS.has(asset.name) &&
+        !asset.children.some((c) => !["animate", "key"].includes(c.name));
+    }
+    if (ok)
+      for (const id of Array.isArray(a.effects) ? a.effects.map(String) : []) {
+        const e = this.host.effects.get(id);
+        if (
+          !e ||
+          !STATIC_EFFECTS.has(String(e.attributes.type)) ||
+          e.attributes.source !== undefined ||
+          e.attributes.paint !== undefined ||
+          e.children.some(
+            (c) =>
+              c.name !== "param" &&
+              ["type", "source", "paint"].includes(
+                String(c.attributes.property),
+              ),
+          )
+        )
+          ok = false;
+      }
+    if (ok)
+      ok = n.children.every(
+        (c) =>
+          EVALUATED.has(c.name) ||
+          (CACHEABLE_CHILDREN.has(c.name) && this.cacheable(c)),
+      );
+    memo.set(n, ok);
+    return ok;
+  }
+  /**
+   * The GPU operations equivalent to drawing adjustment `n` over the whole
+   * frame, or undefined when it needs the CPU (masks, blending, partial
+   * opacity, motion blur, or an effect the GPU tail does not implement).
+   * Parameters are derived exactly as processEffect derives them.
+   * @param {Node} n @returns {import('./gpu.js').TailOp[]|undefined}
+   */
+  tailOps(n) {
+    const host = this.host;
+    if (
+      n.name !== "adjustment" ||
+      !host.active(n) ||
+      host.effectStops.size ||
+      host.shutterSampling ||
+      host.inTexture ||
+      this.captureTarget ||
+      n.children.some((c) => !EVALUATED.has(c.name))
+    )
+      return undefined;
+    const a = this.attrs(n),
+      project = host.scene.children.find((c) => c.name === "project");
+    if (
+      Number(a.opacity ?? 1) !== 1 ||
+      (a.blend && a.blend !== "normal") ||
+      a.matte !== undefined ||
+      a.clip ||
+      a.motionBlur === "on" ||
+      a.motionBlur === true ||
+      ((a.motionBlur === undefined || a.motionBlur === "inherit") &&
+        project?.attributes.motionBlur === true)
+    )
+      return undefined;
+    /** @type {import('./gpu.js').TailOp[]} */ const ops = [];
+    const W = this.width,
+      H = this.height,
+      scale = host.scale;
+    for (const id of (a.effects ?? []).map(String)) {
+      const e = host.effects.get(id);
+      if (!e) return undefined;
+      const p = host.runtime
+        ? host.runtime.attributes(e, host.time)
+        : Object.fromEntries(
+            Object.keys(e.attributes).map((k) => [k, host.value(e, k)]),
+          );
+      if (p.enabled === false || Number(p.mix ?? 1) === 0) continue;
+      if (
+        Object.values(p).some(
+          (v) => typeof v === "number" && !Number.isFinite(v),
+        ) ||
+        Number(p.mix ?? 1) < 1 ||
+        Number(p.samples ?? 16) > 256 ||
+        p.source !== undefined ||
+        p.paint !== undefined
+      )
+        return undefined;
+      const type = String(p.type),
+        triple = (/** @type {unknown} */ v, /** @type {number} */ f) =>
+          v === undefined ? [f, f, f] : String(v).split(/[ ,]+/).map(Number);
+      const lift = triple(p.lift, 0),
+        gamma = triple(p.gamma, 1),
+        gain = triple(p.gain, 1);
+      // grade() validates every triple for every grade type.
+      if (
+        ["lift-gamma-gain", "color-grade", "exposure"].includes(type) &&
+        ([
+          lift,
+          gamma,
+          gain,
+          triple(p.slope, 1),
+          triple(p.offset, 0),
+          triple(p.power, 1),
+        ].some((t) => t.length !== 3 || t.some((x) => !Number.isFinite(x))) ||
+          gamma.some((x) => x <= 0) ||
+          triple(p.power, 1).some((x) => x <= 0))
+      )
+        return undefined;
+      if (type === "lift-gamma-gain") {
+        ops.push({
+          code: OP.liftGammaGain,
+          values: [...lift, ...gain, ...gamma.map((g) => 1 / g)],
+        });
+      } else if (type === "color-grade")
+        ops.push({
+          code: OP.colorGrade,
+          values: [
+            Number(p.saturation ?? 1),
+            Number(p.contrast ?? 1),
+            Number(p.brightness ?? 0),
+          ],
+        });
+      else if (type === "exposure")
+        ops.push({ code: OP.exposure, values: [2 ** Number(p.exposure ?? 0)] });
+      else if (type === "film-grain")
+        ops.push({
+          code: OP.grain,
+          values: [
+            Number(p.amount ?? 1) * Number(p.intensity ?? 1) * 2,
+            Math.max(1, Number(p.size ?? 1) * scale),
+            Math.round(host.time * host.fps),
+            Number(BigInt(/** @type {any} */ (p.seed ?? 0)) & 0xffffffffn),
+          ],
+        });
+      else if (type === "vignette") {
+        const color = host.color.rgb(
+          parseColor(String(p.color ?? "#000000"), host.tokens),
+        );
+        ops.push({
+          code: OP.vignette,
+          values: [
+            Number(p.centerX ?? W / scale / 2) * scale - 0.5,
+            Number(p.centerY ?? H / scale / 2) * scale - 0.5,
+            W / 2,
+            H / 2,
+            Number(p.threshold ?? 0.7),
+            Math.max(0.001, Number(p.softness ?? 0.1)),
+            Number(p.intensity ?? 1),
+            Number(color[0]),
+            Number(color[1]),
+            Number(color[2]),
+          ],
+        });
+      } else return undefined;
+    }
+    return ops.length <= 8 ? ops : undefined;
   }
   /** @param {Node} n */
   isGeometry(n) {
@@ -1227,6 +1529,20 @@ export class Compositor {
             throw new Error("overlapping transitions share an endpoint");
           claimed.add(endpoint);
         }
+    // With a GPU frame tail, a final full-frame adjustment of point operations
+    // is described (this.tail) rather than drawn; FrameRenderer.renderDeferred
+    // hands it to the GPU with the display finish and encode.
+    if (node === this.host.composition && this.host.deferTail) {
+      const last = kids.at(-1)?.n,
+        ops =
+          last && !windows.some((w) => w.from === last || w.to === last)
+            ? this.tailOps(last)
+            : undefined;
+      if (ops) {
+        this.tail = ops;
+        kids.pop();
+      }
+    }
     const drawn = new Set();
     /** @type {Node[]} */ let pending = [];
     const flush = () => {
@@ -1499,6 +1815,70 @@ export class Compositor {
     this.children(this.host.composition, out, null, new Set());
     return this.capture ?? out;
   }
+}
+/** Cached layer states kept per node. */
+const LAYER_VARIANTS = 12;
+/** Children whose effect on a node is already in its evaluated attributes. */
+const EVALUATED = new Set([
+  "animate",
+  "key",
+  "expression",
+  "link",
+  "motionPath",
+]);
+/** Children a cached subtree may hold: anything else (text animators, text
+ * paths, shape modifiers, masks, ...) may read the clock directly. */
+const CACHEABLE_CHILDREN = new Set(["group", "sequence", "layer", "shape"]);
+/** Nodes whose pixels depend on the clock or on state outside their subtree. */
+const UNCACHEABLE = new Set([
+  "adjustment",
+  "particleEmitter",
+  "object3D",
+  "captionTrack",
+  "transition",
+  "deform",
+  "softBody",
+]);
+/** Assets whose pixels are a function of their attributes alone. */
+const STATIC_ASSETS = new Set(["image", "text", "formula"]);
+/** Effects whose output depends only on their input and attributes. */
+const STATIC_EFFECTS = new Set([
+  "drop-shadow",
+  "lighting",
+  "exposure",
+  "lift-gamma-gain",
+  "color-grade",
+  "vignette",
+  "blur",
+]);
+/** @param {Surface} s @param {number} frame
+ * @param {Array<{id:string,pixels:number[]}>} [masks] text masks recorded while drawing it */
+function storeLayer(s, frame, masks) {
+  const r = s.bbox ? clampRect(s.bbox, s.width, s.height) : fullRect(s),
+    w = Math.max(0, r.x1 - r.x0),
+    h = Math.max(0, r.y1 - r.y0),
+    pixels = /** @type {Float32Array<ArrayBufferLike>} */ (
+      new Float32Array(w * h * 4)
+    );
+  for (let y = 0; y < h; y++) {
+    const from = ((r.y0 + y) * s.width + r.x0) * 4;
+    pixels.set(s.data.subarray(from, from + w * 4), y * w * 4);
+  }
+  return { frame, rect: r, pixels, bbox: s.bbox, finite: s.finite, masks };
+}
+/** @param {ReturnType<typeof storeLayer>} c @param {number} width @param {number} height */
+function restoreLayer(c, width, height) {
+  const s = new Surface(width, height),
+    r = c.rect,
+    w = Math.max(0, r.x1 - r.x0);
+  for (let y = r.y0; y < r.y1; y++)
+    s.data.set(
+      c.pixels.subarray((y - r.y0) * w * 4, (y - r.y0 + 1) * w * 4),
+      (y * width + r.x0) * 4,
+    );
+  s.bbox = c.bbox;
+  s.finite = c.finite;
+  return s;
 }
 /** Use the existing scalar fast path only when no affine/vector/layout operation is needed. */
 export function needsCompositor(/** @type {Node} */ scene) {

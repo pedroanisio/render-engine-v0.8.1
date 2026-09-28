@@ -247,7 +247,52 @@ export function accessibilityRequirements(
     minContrast: Number(a.minContrast ?? 4.5),
   };
 }
-/** @param {string} video @param {import('./frame.js').FrameRenderer} renderer @param {NonNullable<ReturnType<typeof accessibilityRequirements>>} config @param {number} start @param {number} end @param {number} fps */
+/**
+ * Renders the frame at `time` and measures every text layer drawn in it: the
+ * lowest contrast ratio between its core pixels (alpha within 5% of its peak)
+ * and the same pixels of the frame rendered without text.
+ * @param {import('./frame.js').FrameRenderer} renderer @param {number} time
+ * @returns {{picture: import('./surface.js').Surface, contrast: Array<[string, number]>}}
+ */
+export function contrastFrame(renderer, time) {
+  const originalCompositor = renderer.useCompositor;
+  renderer.useCompositor = true;
+  try {
+    renderer.contrastChecks = [];
+    renderer.captureContrast = true;
+    const picture = renderer.render(time),
+      masks = renderer.contrastChecks;
+    renderer.captureContrast = false;
+    /** @type {Array<[string, number]>} */ const contrast = [];
+    if (!masks.length) return { picture, contrast };
+    renderer.suppressText = true;
+    const background = renderer.render(time);
+    renderer.suppressText = false;
+    for (const c of masks) {
+      let ratio = Infinity;
+      for (const i of c.pixels) {
+        const luminance = (/** @type {Float32Array} */ data) =>
+          0.2126 * Number(data[i]) +
+          0.7152 * Number(data[i + 1]) +
+          0.0722 * Number(data[i + 2]);
+        const x = luminance(picture.data),
+          y = luminance(background.data);
+        ratio = Math.min(
+          ratio,
+          (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05),
+        );
+      }
+      contrast.push([c.id, ratio]);
+    }
+    return { picture, contrast };
+  } finally {
+    renderer.captureContrast = false;
+    renderer.suppressText = false;
+    renderer.useCompositor = originalCompositor;
+  }
+}
+/** @param {string} video @param {import('./frame.js').FrameRenderer} renderer @param {NonNullable<ReturnType<typeof accessibilityRequirements>>} config @param {number} start @param {number} end @param {number} fps
+ * @param {Map<number,Array<[string,number]>>} [contrast] per-frame text contrast measured while the frames were rendered (see contrastFrame); frames it lacks are measured here */
 export async function accessibilityReport(
   video,
   renderer,
@@ -255,6 +300,7 @@ export async function accessibilityReport(
   start,
   end,
   fps,
+  contrast,
 ) {
   /** @type {Array<{check:string,message:string,severity:string,time?:number}>} */ const findings =
     [];
@@ -275,50 +321,19 @@ export async function accessibilityReport(
       });
   }
   if (config.contrastCheck !== "off") {
-    const originalCompositor = renderer.useCompositor;
-    renderer.useCompositor = true;
-    renderer.captureContrast = true;
-    try {
-      const seen = new Set();
-      for (let f = Math.round(start * fps); f < Math.round(end * fps); f++) {
-        renderer.contrastChecks = [];
-        renderer.captureContrast = true;
-        const picture = renderer.render(f / fps),
-          masks = renderer.contrastChecks;
-        renderer.captureContrast = false;
-        renderer.suppressText = true;
-        const background = renderer.render(f / fps);
-        renderer.suppressText = false;
-        for (const c of masks) {
-          let ratio = Infinity;
-          for (const i of c.pixels) {
-            const luminance = (/** @type {Float32Array} */ data) =>
-              0.2126 * Number(data[i]) +
-              0.7152 * Number(data[i + 1]) +
-              0.0722 * Number(data[i + 2]);
-            const x = luminance(picture.data),
-              y = luminance(background.data);
-            ratio = Math.min(
-              ratio,
-              (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05),
-            );
-          }
-          if (ratio < config.minContrast && !seen.has(c.id)) {
-            seen.add(c.id);
-            findings.push({
-              check: "contrast",
-              message: `${c.id}: ${ratio.toFixed(2)}:1 < ${config.minContrast}:1`,
-              severity: config.contrastCheck,
-              time: f / fps - start,
-            });
-          }
+    const seen = new Set();
+    for (let f = Math.round(start * fps); f < Math.round(end * fps); f++)
+      for (const [id, ratio] of contrast?.get(f) ??
+        contrastFrame(renderer, f / fps).contrast)
+        if (ratio < config.minContrast && !seen.has(id)) {
+          seen.add(id);
+          findings.push({
+            check: "contrast",
+            message: `${id}: ${ratio.toFixed(2)}:1 < ${config.minContrast}:1`,
+            severity: config.contrastCheck,
+            time: f / fps - start,
+          });
         }
-      }
-    } finally {
-      renderer.captureContrast = false;
-      renderer.suppressText = false;
-      renderer.useCompositor = originalCompositor;
-    }
   }
   return {
     configuration: config,

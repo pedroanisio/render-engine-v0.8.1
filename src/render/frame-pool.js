@@ -8,15 +8,19 @@ import { Worker } from "node:worker_threads";
 import { availableParallelism, freemem } from "node:os";
 
 /** @typedef {import('./pipeline.js').RenderOptions} RenderOptions */
-/** @typedef {{bytes:ArrayBuffer,byteOffset:number,length:number,unsupported:string[],warnings:string[]}} FrameResult */
+/** @typedef {{bytes:ArrayBuffer,byteOffset:number,length:number,unsupported:string[],warnings:string[],contrast?:Array<[string,number]>}} FrameResult */
 
-/** Threads for a render that did not ask: half the cores, at most four, and
- * only as many extra renderers as free memory comfortably holds. */
-export function defaultThreads() {
-  const cores = Math.floor(availableParallelism() / 2);
+/** Threads for a render that did not ask: half the cores (the other half
+ * encodes), at most four, or every core, at most sixteen, when a GPU encodes;
+ * and only as many renderers as free memory comfortably holds.
+ * @param {boolean} [gpuEncoding] */
+export function defaultThreads(gpuEncoding = false) {
+  const cores = gpuEncoding
+    ? availableParallelism()
+    : Math.floor(availableParallelism() / 2);
   const footprint = Math.max(process.memoryUsage().rss * 1.5, 512 << 20);
   const byMemory = Math.floor(freemem() / footprint);
-  return Math.max(1, Math.min(4, cores, byMemory));
+  return Math.max(1, Math.min(gpuEncoding ? 16 : 4, cores, byMemory));
 }
 
 export class FramePool {
@@ -42,6 +46,71 @@ export class FramePool {
     /** @type {Map<number,FrameResult>} */ this.results = new Map();
     /** @type {Error|undefined} */ this.failure = undefined;
     this.closed = false;
+    /** Workers held by a segment; their frames never return them to `idle`.
+     * @type {Set<Worker>} */ this.reserved = new Set();
+    /** @type {Array<{resolve:(w:Worker)=>void,reject:(e:Error)=>void}>} */
+    this.queue = [];
+  }
+  /** One worker for the caller's exclusive use, once one is free.
+   * @returns {Promise<Worker>} */
+  acquire() {
+    if (this.failure) return Promise.reject(this.failure);
+    const worker = this.idle.pop();
+    if (worker) {
+      this.reserved.add(worker);
+      return Promise.resolve(worker);
+    }
+    return new Promise((resolve, reject) =>
+      this.queue.push({ resolve, reject }),
+    );
+  }
+  /** @param {Worker} worker */
+  release(worker) {
+    const next = this.queue.shift();
+    if (next) next.resolve(worker);
+    else {
+      this.reserved.delete(worker);
+      this.idle.push(worker);
+    }
+  }
+  /**
+   * Encoded frames f0..f1-1 of one segment, rendered in order by one worker so
+   * that consecutive frames share its layer cache. Segments may run
+   * concurrently, one worker each; the worker's media caches are dropped at the
+   * end, as the serial path does per segment.
+   * @param {number} f0 @param {number} f1 @param {number} fps
+   * @param {{unsupported:Set<string>,warnings:Set<string>}} renderer
+   * @param {(frame:number, contrast:Array<[string,number]>)=>void} [onContrast]
+   *   when given, each frame's text contrast is measured as it renders
+   */
+  async *segment(f0, f1, fps, renderer, onContrast) {
+    const worker = await this.acquire();
+    try {
+      let sent = f0;
+      for (let f = f0; f < f1; f++) {
+        this.signal?.throwIfAborted();
+        // Two frames in flight: the worker renders the next while this one encodes.
+        while (sent < f1 && sent < f + 2) {
+          worker.postMessage({
+            type: "render",
+            id: sent,
+            time: sent / fps,
+            contrast: !!onContrast,
+          });
+          sent++;
+        }
+        const r = await this.take(f);
+        for (const u of r.unsupported) renderer.unsupported.add(u);
+        for (const w of r.warnings) renderer.warnings.add(w);
+        if (onContrast) onContrast(f, r.contrast ?? []);
+        yield Buffer.from(r.bytes, r.byteOffset, r.length);
+      }
+    } finally {
+      if (!this.closed) {
+        worker.postMessage({ type: "clear" });
+        this.release(worker);
+      }
+    }
   }
   /** Spawns the workers and waits until each has built its renderer. */
   async start() {
@@ -94,7 +163,7 @@ export class FramePool {
   }
   /** @param {Worker} worker @param {any} m */
   receive(worker, m) {
-    this.idle.push(worker);
+    if (!this.reserved.has(worker)) this.idle.push(worker);
     const waiter = this.waiters.get(m.id);
     if (waiter) {
       this.waiters.delete(m.id);
@@ -106,6 +175,7 @@ export class FramePool {
     this.failure ??= error;
     for (const waiter of this.waiters.values()) waiter.reject(error);
     this.waiters.clear();
+    for (const waiter of this.queue.splice(0)) waiter.reject(error);
   }
   /** @param {number} id @returns {Promise<FrameResult>} */
   take(id) {

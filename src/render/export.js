@@ -196,8 +196,121 @@ export function outputPlan(a) {
     pixel,
   };
 }
-/** @param {Attrs} a @param {number} fps @param {number} duration @param {number} width @param {number} height */
-export function videoArguments(a, fps, duration, width, height) {
+/** NVIDIA encoders and the pixel formats they take for each plan format. */
+const NVENC =
+  /** @type {Record<string,{encoder:string,pixels:Record<string,string>,min:[number,number],max:number}>} */ ({
+    h264: {
+      encoder: "h264_nvenc",
+      min: [145, 49],
+      max: 4096,
+      pixels: { yuv420p: "yuv420p", yuv444p: "yuv444p" },
+    },
+    h265: {
+      encoder: "hevc_nvenc",
+      min: [129, 33],
+      max: 8192,
+      pixels: { yuv420p: "yuv420p", yuv420p10le: "p010le", yuv444p: "yuv444p" },
+    },
+  });
+/** x264/x265 presets on NVENC's p1 (fastest) .. p7 (slowest, best). */
+const NVENC_PRESETS = /** @type {Record<string,string>} */ ({
+  ultrafast: "p1",
+  superfast: "p2",
+  veryfast: "p3",
+  faster: "p4",
+  fast: "p5",
+  medium: "p6",
+  slow: "p7",
+  slower: "p7",
+  veryslow: "p7",
+  placebo: "p7",
+});
+/** @type {Map<string,string|false>} */ const gpuProbes = new Map();
+/** Identity of the working NVIDIA encoder `encoder` (GPU and driver), or false.
+ * The probe encodes one frame, so a listed encoder without a usable GPU fails.
+ * @param {string} encoder */
+function gpuIdentity(encoder) {
+  let id = gpuProbes.get(encoder);
+  if (id === undefined) {
+    try {
+      execFileSync(
+        "ffmpeg",
+        [
+          "-v",
+          "error",
+          "-f",
+          "lavfi",
+          "-i",
+          "color=size=256x256",
+          "-frames:v",
+          "1",
+          "-c:v",
+          encoder,
+          "-f",
+          "null",
+          "-",
+        ],
+        { stdio: "ignore", timeout: 30000 },
+      );
+      let gpu = "nvenc";
+      try {
+        gpu =
+          execFileSync(
+            "nvidia-smi",
+            ["--query-gpu=name,driver_version", "--format=csv,noheader"],
+            { encoding: "utf8", timeout: 10000 },
+          )
+            .trim()
+            .split("\n")[0] ?? gpu;
+      } catch {
+        // The encoder works; the driver tool is optional.
+      }
+      id = `${encoder} ${gpu}`;
+    } catch {
+      id = false;
+    }
+    gpuProbes.set(encoder, id);
+  }
+  return id;
+}
+/**
+ * The GPU encoder for this output when the machine has one that encodes it the
+ * way the output asks: H.264/H.265 in a pixel format NVENC takes, without
+ * two-pass or x265-only HDR metadata, at a frame size NVENC supports. `mode`
+ * "cpu" never uses one; "gpu" requires one; "auto" uses one when present.
+ * @param {Attrs} a @param {"auto"|"cpu"|"gpu"} [mode] @param {number} [width] @param {number} [height]
+ * @returns {{encoder:string,pixel:string,identity:string}|undefined}
+ */
+export function gpuEncoder(a, mode = "auto", width = 1920, height = 1080) {
+  if (mode === "cpu") return undefined;
+  const p = outputPlan(a),
+    nv = NVENC[p.codec],
+    pixel = nv?.pixels[p.pixel];
+  const eligible =
+    nv &&
+    pixel &&
+    width >= nv.min[0] &&
+    height >= nv.min[1] &&
+    width <= nv.max &&
+    height <= nv.max &&
+    a.twoPass !== true &&
+    a.maxCLL === undefined &&
+    a.maxFALL === undefined &&
+    a.masteringDisplay === undefined;
+  const identity = eligible ? gpuIdentity(nv.encoder) : false;
+  if (mode === "gpu" && !identity)
+    throw new Error(
+      `No GPU encoder is available for ${p.codec} at ${width}x${height} with pixelFormat=${p.pixel}${a.twoPass === true ? " and twoPass" : ""}`,
+    );
+  return nv && pixel && identity
+    ? { encoder: nv.encoder, pixel, identity }
+    : undefined;
+}
+/**
+ * @param {Attrs} a @param {number} fps @param {number} duration @param {number} width @param {number} height
+ * @param {ReturnType<typeof gpuEncoder>} [gpu] encode on this GPU encoder instead
+ */
+export function videoArguments(a, fps, duration, width, height, gpu) {
   const p = outputPlan(a);
   if (p.audioOnly) return [];
   if (/420/.test(p.pixel) && (width % 2 || height % 2))
@@ -210,11 +323,10 @@ export function videoArguments(a, fps, duration, width, height) {
     throw new Error("DNxHR requires at least 256x120");
   const args = [
     "-c:v",
-    p.encoder,
-    "-threads",
-    "1",
+    gpu?.encoder ?? p.encoder,
+    ...(gpu ? [] : ["-threads", "1"]),
     "-pix_fmt",
-    p.pixel,
+    gpu?.pixel ?? p.pixel,
     "-r",
     String(fps),
     "-g",
@@ -235,11 +347,36 @@ export function videoArguments(a, fps, duration, width, height) {
       budget === undefined
         ? a.bitrate
         : Math.min(Number(a.bitrate ?? Infinity), budget);
-    args.push(
-      ...(bitrate ? ["-b:v", String(bitrate)] : ["-crf", String(a.crf ?? 18)]),
-    );
-    if (["h264", "h265"].includes(p.codec))
-      args.push("-preset", String(a.preset ?? "medium"));
+    if (gpu) {
+      // Constant QP three steps below the CRF matches x264/x265 CRF quality
+      // (PSNR and SSIM) at a similar size; B-frames as x264's defaults use.
+      args.push(
+        ...(bitrate
+          ? ["-rc", "vbr", "-b:v", String(bitrate)]
+          : [
+              "-rc",
+              "constqp",
+              "-qp",
+              String(
+                Math.min(51, Math.max(0, Math.round(Number(a.crf ?? 18) + 3))),
+              ),
+            ]),
+        "-preset",
+        NVENC_PRESETS[String(a.preset ?? "medium")] ?? "p6",
+        "-tune",
+        "hq",
+      );
+      if (a.bFrames === undefined)
+        args.push("-bf", "3", "-b_ref_mode", "middle");
+    } else {
+      args.push(
+        ...(bitrate
+          ? ["-b:v", String(bitrate)]
+          : ["-crf", String(a.crf ?? 18)]),
+      );
+      if (["h264", "h265"].includes(p.codec))
+        args.push("-preset", String(a.preset ?? "medium"));
+    }
     if (p.codec === "av1") args.push("-cpu-used", "6");
     if (p.codec === "vp9") args.push("-auto-alt-ref", "0");
   } else if (a.maxFileSize)
@@ -263,8 +400,22 @@ export function videoArguments(a, fps, duration, width, height) {
   else if (p.codec === "dnxhr")
     args.push("-profile:v", String(a.profile ?? "dnxhr_hq"));
   else if (a.profile !== undefined) args.push("-profile:v", String(a.profile));
-  if (p.codec === "h265") {
+  if (p.codec === "h265" && !gpu) {
     const params = ["pools=1", "frame-threads=1"];
+    // The colour description also goes to x265 itself: FFmpeg 8 no longer
+    // passes -color_trc through, which would leave PQ/HLG masters untagged.
+    const color = colorArguments(a),
+      tag = (/** @type {string} */ flag) => color[color.indexOf(flag) + 1];
+    params.push(
+      `range=${tag("-color_range") === "pc" ? "full" : "limited"}`,
+      `colormatrix=${tag("-colorspace")}`,
+    );
+    if (color.includes("-color_primaries"))
+      params.push(`colorprim=${tag("-color_primaries")}`);
+    if (color.includes("-color_trc"))
+      params.push(
+        `transfer=${tag("-color_trc") === "gamma22" ? "bt470m" : tag("-color_trc")}`,
+      );
     if (a.maxCLL !== undefined || a.maxFALL !== undefined)
       params.push(`max-cll=${a.maxCLL ?? 0},${a.maxFALL ?? 0}`);
     if (a.masteringDisplay !== undefined)
@@ -366,8 +517,10 @@ export function audioArguments(a) {
 }
 
 /** Validate arbitrary encoder options against the installed backend, before scene frames.
- * @param {Attrs} a @param {number} fps @param {number} duration @param {number} width @param {number} height @param {string} work */
-export function checkEncoding(a, fps, duration, width, height, work) {
+ * @param {Attrs} a @param {number} fps @param {number} duration @param {number} width @param {number} height @param {string} work
+ * @param {ReturnType<typeof gpuEncoder>} [gpu]
+ */
+export function checkEncoding(a, fps, duration, width, height, work, gpu) {
   const p = outputPlan(a);
   const ext = p.sequence ? String(a.path).split(".").at(-1) : p.container;
   const file = `${work}/probe-${p.sequence ? "%06d." : ""}${ext}`;
@@ -387,7 +540,11 @@ export function checkEncoding(a, fps, duration, width, height, work) {
         ]
       : []),
     ...(!p.audioOnly
-      ? ["-frames:v", "1", ...videoArguments(a, fps, duration, width, height)]
+      ? [
+          "-frames:v",
+          "1",
+          ...videoArguments(a, fps, duration, width, height, gpu),
+        ]
       : []),
     ...audioArguments(a),
     "-t",

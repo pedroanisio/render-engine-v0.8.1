@@ -26,7 +26,7 @@ import { FramePool, defaultThreads } from "./frame-pool.js";
 
 import { loadScene } from "../index.js";
 import { accessibilityReport, contrastFrame } from "./accessibility.js";
-import { gpuDevice, gpuFrame } from "./gpu.js";
+import { acquireGpu, releaseGpu, gpuFrame } from "./gpu.js";
 import { measureAudio } from "./audio.js";
 import { captionLanguage } from "./caption-languages.js";
 import { toVtt, clipCaptions } from "./captions.js";
@@ -207,6 +207,8 @@ export async function renderEpisode(o) {
   } = await createRenderer(o);
   let cleanupWork = "";
   let releaseLock = () => {};
+  // An acquired GPU device is released when the render ends (see acquireGpu).
+  let releaseRenderGpu = false;
   /** @type {FramePool|undefined} */ let pool;
   try {
     const anim = runtime;
@@ -223,10 +225,8 @@ export async function renderEpisode(o) {
       );
     // Frames finish on the GPU where a device is available; its results are
     // deterministic per device and driver, so the device keys the segments.
-    const gpuRender =
-      gpuMode !== "off" && plan.codec !== "exr-sequence"
-        ? await gpuDevice()
-        : undefined;
+    releaseRenderGpu = gpuMode !== "off" && plan.codec !== "exr-sequence";
+    const gpuRender = releaseRenderGpu ? await acquireGpu() : undefined;
     if (gpuMode === "on" && !gpuRender)
       throw new Error("--gpu on: no WebGPU device is available for rendering");
     const destinations = out.children
@@ -1211,6 +1211,7 @@ with zipfile.ZipFile(sys.argv[2],'w',compression=zipfile.ZIP_DEFLATED) as z:
     return { video, captions, posters, rendered, cached };
   } finally {
     pool?.close();
+    if (releaseRenderGpu) await releaseGpu();
     releaseLock();
     media.close();
     if (cleanupWork) rmSync(cleanupWork, { recursive: true, force: true });

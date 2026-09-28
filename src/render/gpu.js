@@ -226,6 +226,21 @@ export function gpuDevice() {
   return opening;
 }
 
+let users = 0;
+/** gpuDevice() for a caller that will release it: an open device keeps the
+ * process alive, so the last release destroys it (a later acquire reopens). */
+export function acquireGpu() {
+  users++;
+  return gpuDevice();
+}
+export async function releaseGpu() {
+  if (--users > 0) return;
+  users = 0;
+  const gpu = await opening;
+  opening = undefined;
+  gpu?.device.destroy();
+}
+
 /** Per-device pipeline and per-frame-size buffer sets (one per frame in flight). */
 /** @type {WeakMap<object, {pipeline:any, thresholds:Map<Uint32Array,any>, free:Map<string,any[]>}>} */
 const states = new WeakMap();

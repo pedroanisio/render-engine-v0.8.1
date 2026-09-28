@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { createRenderer } from "../src/render/setup.js";
 import { renderEpisode } from "../src/render/pipeline.js";
 import { contrastFrame } from "../src/render/accessibility.js";
-import { gpuDevice, gpuFrame } from "../src/render/gpu.js";
+import { acquireGpu, releaseGpu, gpuFrame } from "../src/render/gpu.js";
 import { gpuEncoder, videoArguments } from "../src/render/export.js";
 import { spatial } from "../src/render/fx/spatial.js";
 import { colors, clamp } from "../src/render/fx/pixels.js";
@@ -142,8 +142,11 @@ test("vignette fast path equals the per-pixel colour callback", () => {
 });
 
 test("GPU tail matches the CPU finish within float32 rounding", async (t) => {
-  const gpu = await gpuDevice();
-  if (!gpu) return t.skip("no WebGPU device");
+  const gpu = await acquireGpu();
+  if (!gpu) {
+    await releaseGpu();
+    return t.skip("no WebGPU device");
+  }
   const file = scene();
   const cpu = await createRenderer({ sceneFile: file }),
     dev = await createRenderer({ sceneFile: file });
@@ -180,6 +183,7 @@ test("GPU tail matches the CPU finish within float32 rounding", async (t) => {
   } finally {
     cpu.media.close();
     dev.media.close();
+    await releaseGpu();
   }
 });
 
@@ -311,7 +315,8 @@ test("--gpu off keeps CPU frames and encoding under separate cache keys", async 
     f.endsWith(".mkv"),
   );
   const gpu =
-    (await gpuDevice()) ??
+    (await acquireGpu()) ??
     gpuEncoder({ codec: "h264", container: "mp4" }, "auto", 192, 108);
+  await releaseGpu();
   assert.equal(all.length, gpu ? off.length * 2 : off.length);
 });
